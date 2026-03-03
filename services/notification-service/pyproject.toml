@@ -1,0 +1,18 @@
+[build-system]
+requires = ["hatchling>=1.24.0"]
+build-backend = "hatchling.build"
+
+[project]
+name = "edpo-notification-service"
+version = "0.1.0"
+description = "Notification service for EDPO project"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+  "edpo-shared>=0.1.0",
+  "fastapi>=0.115.0,<1.0.0",
+  "psycopg[binary]>=3.2.0,<4.0.0",
+  "uvicorn[standard]>=0.30.0,<1.0.0"
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]

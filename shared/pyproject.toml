@@ -1,0 +1,19 @@
+[build-system]
+requires = ["hatchling>=1.24.0"]
+build-backend = "hatchling.build"
+
+[project]
+name = "edpo-shared"
+version = "0.1.0"
+description = "Shared utilities for EDPO event-driven services"
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+  "confluent-kafka>=2.4.0,<3.0.0",
+  "pydantic>=2.7.0,<3.0.0",
+  "pydantic-settings>=2.2.1,<3.0.0",
+  "structlog>=24.2.0,<26.0.0"
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["shared"]
