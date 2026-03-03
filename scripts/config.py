@@ -1,0 +1,10 @@
+KAFKA_BOOTSTRAP = "localhost:9092"
+TOPIC = "experiment-topic"
+
+MESSAGE_COUNT = 5000
+MESSAGE_SIZE = 512  # bytes
+
+BATCH_SIZES = [0, 16384, 65536]
+ACKS_OPTIONS = [0, 1, "all"]
+
+PRODUCER_COUNTS = [1, 2, 4]
