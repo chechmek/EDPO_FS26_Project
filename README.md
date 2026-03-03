@@ -7,6 +7,16 @@ It demonstrates the **Event Notification** pattern with three services:
 - `interaction-service`: stores likes/comments/follows and emits interaction events
 - `notification-service`: consumes interaction events and builds notifications in its own datastore
 
+## Exercise 2
+
+This draft covers the **Event Notification** EDA pattern.
+
+Implemented mapping to the pattern:
+- `interaction-service` publishes interaction events (`PostLiked`, `PostUnliked`, `CommentAdded`, `UserFollowed`) to Kafka.
+- `notification-service` subscribes to events and creates owner-facing notifications only for `PostLiked` and `CommentAdded` (`Your post was liked`, `Your post was commented`).
+- There is **no direct synchronous call** from `interaction-service` to `notification-service` (dependency inversion / decoupling).
+
+
 ## Tech Stack
 
 - Python 3.12
@@ -42,6 +52,98 @@ All services use `shared/events.py`:
   "payload": {}
 }
 ```
+
+Event types currently defined in `shared/events.py`:
+
+- `PostCreated`
+- `PostLiked`
+- `PostUnliked`
+- `CommentAdded`
+- `UserFollowed`
+
+Notification behavior:
+
+- `notification-service` consumes `PostCreated` to maintain `post_owners`
+- `notification-service` creates notifications only for `PostLiked` and `CommentAdded`
+- `PostUnliked` and `UserFollowed` are consumed but do not create notifications
+
+## Data Models
+
+### Event Models
+
+Envelope:
+
+- `event_id: UUID`
+- `type: str`
+- `ts: datetime (UTC ISO8601)`
+- `payload: object`
+
+Payloads:
+
+- `PostCreatedPayload`
+  - `post_id: UUID`
+  - `author_id: UUID`
+- `PostLikedPayload`
+  - `post_id: UUID`
+  - `user_id: UUID`
+- `PostUnlikedPayload`
+  - `post_id: UUID`
+  - `user_id: UUID`
+- `CommentAddedPayload`
+  - `comment_id: UUID`
+  - `post_id: UUID`
+  - `user_id: UUID`
+  - `text: str`
+- `UserFollowedPayload`
+  - `follower_id: UUID`
+  - `followee_id: UUID`
+
+### Persistence Models
+
+`post_db.posts`
+
+- `id: UUID`
+- `author_id: UUID`
+- `content: TEXT`
+- `created_at: TIMESTAMPTZ`
+
+`interaction_db.likes`
+
+- `post_id: UUID`
+- `user_id: UUID`
+- `created_at: TIMESTAMPTZ`
+
+`interaction_db.comments`
+
+- `id: UUID`
+- `post_id: UUID`
+- `user_id: UUID`
+- `text: TEXT`
+- `created_at: TIMESTAMPTZ`
+
+`interaction_db.follows`
+
+- `follower_id: UUID`
+- `followee_id: UUID`
+- `created_at: TIMESTAMPTZ`
+
+`notification_db.post_owners`
+
+- `post_id: UUID`
+- `author_id: UUID`
+- `updated_at: TIMESTAMPTZ`
+
+`notification_db.notifications`
+
+- `id: UUID`
+- `user_id: UUID`
+- `type: TEXT`
+- `message: TEXT`
+- `payload: JSONB`
+- `source_event_id: UUID (UNIQUE)`
+- `is_read: BOOLEAN`
+- `created_at: TIMESTAMPTZ`
+- `read_at: TIMESTAMPTZ | NULL`
 
 ### Topics
 
@@ -130,26 +232,38 @@ make demo
 
 ## API Endpoints
 
-### post-service
+All exposed HTTP endpoints by service:
 
-- `POST /posts` body: `{ "author_id": "cb3fc3df-7e44-4b87-b5de-8fcd46491290", "content": "hello" }`
+`post-service` (`http://localhost:8001`)
+
+- `POST /posts` body: `{ "author_id": "<uuid>", "content": "hello" }`
 - `GET /posts/{post_id}`
+- `GET /docs`
+- `GET /redoc`
+- `GET /openapi.json`
 
-### interaction-service
+`interaction-service` (`http://localhost:8002`)
 
-- `POST /posts/{post_id}/like` body: `{ "user_id": "cb3fc3df-7e44-4b87-b5de-8fcd46491290" }`
-- `POST /posts/{post_id}/unlike` body: `{ "user_id": "cb3fc3df-7e44-4b87-b5de-8fcd46491290" }`
-- `POST /posts/{post_id}/comment` body: `{ "user_id": "cb3fc3df-7e44-4b87-b5de-8fcd46491290", "text": "nice" }`
-- `POST /users/{followee_id}/follow` body: `{ "follower_id": "4c43a16f-670c-401a-a257-f6cca0536965" }`
+- `POST /posts/{post_id}/like` body: `{ "user_id": "<uuid>" }`
+- `POST /posts/{post_id}/unlike` body: `{ "user_id": "<uuid>" }`
+- `POST /posts/{post_id}/comment` body: `{ "user_id": "<uuid>", "text": "nice" }`
+- `POST /users/{followee_id}/follow` body: `{ "follower_id": "<uuid>" }`
+- `GET /docs`
+- `GET /redoc`
+- `GET /openapi.json`
 
 Partition key strategy:
+
 - Post-related events: key = `post_id`
 - Follow events: key = `followee_id`
 
-### notification-service
+`notification-service` (`http://localhost:8003`)
 
 - `GET /users/{user_id}/notifications?unread_only=false`
 - `POST /users/{user_id}/notifications/{notification_id}/read`
+- `GET /docs`
+- `GET /redoc`
+- `GET /openapi.json`
 
 Notification types created by `notification-service`:
 - `PostLiked` with message `Your post was liked`
@@ -167,70 +281,4 @@ Notification types created by `notification-service`:
   - `social.post.events`
   - `social.interaction.events`
 
-### Console consumer examples
 
-Read interaction topic from inside Kafka container:
-
-```bash
-docker exec -it edpo-kafka kafka-console-consumer \
-  --bootstrap-server kafka:29092 \
-  --topic social.interaction.events \
-  --from-beginning
-```
-
-Read post topic:
-
-```bash
-docker exec -it edpo-kafka kafka-console-consumer \
-  --bootstrap-server kafka:29092 \
-  --topic social.post.events \
-  --from-beginning
-```
-
-### Query Postgres tables
-
-```bash
-docker exec -it edpo-postgres psql -U postgres -d post_db -c "SELECT id,author_id,created_at FROM posts ORDER BY created_at DESC LIMIT 5;"
-docker exec -it edpo-postgres psql -U postgres -d interaction_db -c "SELECT id,post_id,user_id,created_at FROM comments ORDER BY created_at DESC LIMIT 5;"
-docker exec -it edpo-postgres psql -U postgres -d notification_db -c "SELECT id,user_id,type,source_event_id,is_read FROM notifications ORDER BY created_at DESC LIMIT 10;"
-```
-
-## Running Services Locally with uv (without Docker for apps)
-
-Infrastructure still via Docker (`kafka`, `kafka-ui`, `postgres`), then run services from source:
-
-```bash
-source .venv/bin/activate
-
-# terminal 1
-cd services/post-service
-DB_DSN=postgresql://post_user:post_pass@localhost:15432/post_db \
-KAFKA_BOOTSTRAP_SERVERS=localhost:19092 \
-uv run --no-project uvicorn app.main:app --reload --port 8001
-
-# terminal 2
-cd services/interaction-service
-DB_DSN=postgresql://interaction_user:interaction_pass@localhost:15432/interaction_db \
-KAFKA_BOOTSTRAP_SERVERS=localhost:19092 \
-uv run --no-project uvicorn app.main:app --reload --port 8002
-
-# terminal 3
-cd services/notification-service
-DB_DSN=postgresql://notification_user:notification_pass@localhost:15432/notification_db \
-KAFKA_BOOTSTRAP_SERVERS=localhost:19092 \
-KAFKA_GROUP_ID=notification-service \
-uv run --no-project uvicorn app.main:app --reload --port 8003
-```
-
-## Exercise 2
-
-This draft covers the **Event Notification** EDA pattern (from the lecture’s **four common patterns**).
-
-Implemented mapping to the pattern:
-- `interaction-service` publishes interaction events (`PostLiked`, `PostUnliked`, `CommentAdded`, `UserFollowed`) to Kafka.
-- `notification-service` subscribes to events and creates owner-facing notifications only for `PostLiked` and `CommentAdded` (`Your post was liked`, `Your post was commented`).
-- There is **no direct synchronous call** from `interaction-service` to `notification-service` (dependency inversion / decoupling).
-
-How to observe it:
-- Kafka UI shows produced interaction events.
-- `scripts/generate_load.py` generates high-volume interactions via HTTP, which trigger Kafka events and notification creation.
