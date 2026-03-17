@@ -1,15 +1,151 @@
+# Content Verification Platform
+# ==============================
+# Services:
+#   user-service         :8001
+#   verification-service :8002
+#   reporting-service    :8003
+#   attestation-service  :8004
+#   zeebe (gRPC)         :26500  (Camunda workflow engine)
+#   operate (UI)         :8080   (Camunda monitoring dashboard)
+#   elasticsearch        :9200   (required by Operate)
+#   kafka                :9092
+#   kafka-ui             :8079
+#
+# NOTE: Elasticsearch is memory-hungry (~512MB JVM heap configured below).
+#   If Docker is tight on memory, reduce ES_JAVA_OPTS or disable operate +
+#   elasticsearch and monitor via zeebe REST API on :8088.
+#
+# Start: docker compose up --build
+# Stop:  docker compose down -v
+
 services:
-  kafka:
-    image: confluentinc/cp-kafka:8.2.0
-    container_name: edpo-kafka
+
+  # --------------------------------------------------------------------------
+  # Application services
+  # --------------------------------------------------------------------------
+
+  user-service:
+    build: ./services/user-service
+    container_name: cv-user-service
     ports:
-      - "19092:9092"
+      - "8001:8001"
+    environment:
+      ZEEBE_ADDRESS: zeebe:26500
+    depends_on:
+      zeebe:
+        condition: service_healthy
+    restart: unless-stopped
+
+  verification-service:
+    build: ./services/verification-service
+    container_name: cv-verification-service
+    ports:
+      - "8002:8002"
+    environment:
+      ZEEBE_ADDRESS: zeebe:26500
+      USER_SERVICE_URL: http://user-service:8001
+    depends_on:
+      zeebe:
+        condition: service_healthy
+      user-service:
+        condition: service_started
+    restart: unless-stopped
+
+  reporting-service:
+    build: ./services/reporting-service
+    container_name: cv-reporting-service
+    ports:
+      - "8003:8003"
+    environment:
+      ZEEBE_ADDRESS: zeebe:26500
+    depends_on:
+      zeebe:
+        condition: service_healthy
+    restart: unless-stopped
+
+  attestation-service:
+    build: ./services/attestation-service
+    container_name: cv-attestation-service
+    ports:
+      - "8004:8004"
+    environment:
+      ATTESTATION_INTERVAL_SECONDS: "60"
+    restart: unless-stopped
+
+  # --------------------------------------------------------------------------
+  # Camunda 8 — Zeebe (workflow engine) + Operate (monitoring UI)
+  # --------------------------------------------------------------------------
+
+  zeebe:
+    image: camunda/zeebe:8.5.3
+    container_name: cv-zeebe
+    environment:
+      - ZEEBE_BROKER_EXPORTERS_ELASTICSEARCH_CLASSNAME=io.camunda.zeebe.exporter.ElasticsearchExporter
+      - ZEEBE_BROKER_EXPORTERS_ELASTICSEARCH_ARGS_URL=http://elasticsearch:9200
+      - ZEEBE_BROKER_EXPORTERS_ELASTICSEARCH_ARGS_INDEX_PREFIX=zeebe-record
+    ports:
+      - "26500:26500"   # gRPC — used by pyzeebe workers
+      - "9600:9600"     # management/health
+      - "8088:8080"     # Zeebe REST API (optional)
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:9600/ready || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    restart: unless-stopped
+
+  operate:
+    image: camunda/operate:8.5.3
+    container_name: cv-operate
+    ports:
+      - "8080:8080"
+    environment:
+      - CAMUNDA_OPERATE_ZEEBE_GATEWAYADDRESS=zeebe:26500
+      - CAMUNDA_OPERATE_ELASTICSEARCH_URL=http://elasticsearch:9200
+      - CAMUNDA_OPERATE_ZEEBEELASTICSEARCH_URL=http://elasticsearch:9200
+    depends_on:
+      zeebe:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+    restart: unless-stopped
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.13.4
+    container_name: cv-elasticsearch
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - ES_JAVA_OPTS=-Xms512m -Xmx512m
+    ports:
+      - "9200:9200"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:9200/_cluster/health || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+    restart: unless-stopped
+
+  # --------------------------------------------------------------------------
+  # Kafka (KRaft — no Zookeeper) + UI
+  # --------------------------------------------------------------------------
+
+  kafka:
+    image: confluentinc/cp-kafka:7.6.1
+    container_name: cv-kafka
+    ports:
+      - "9092:9092"
     environment:
       KAFKA_NODE_ID: 1
-      CLUSTER_ID: MkU3OEVBNTcwNTJENDM2Qk
+      CLUSTER_ID: "content-verification-cluster-01"
       KAFKA_PROCESS_ROLES: "broker,controller"
       KAFKA_LISTENERS: "PLAINTEXT://kafka:29092,CONTROLLER://kafka:29093,PLAINTEXT_HOST://0.0.0.0:9092"
-      KAFKA_ADVERTISED_LISTENERS: "PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:19092"
+      KAFKA_ADVERTISED_LISTENERS: "PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092"
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT"
       KAFKA_INTER_BROKER_LISTENER_NAME: "PLAINTEXT"
       KAFKA_CONTROLLER_LISTENER_NAMES: "CONTROLLER"
@@ -17,95 +153,24 @@ services:
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
-      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-topics --bootstrap-server localhost:9092 --list || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+    restart: unless-stopped
 
   kafka-ui:
     image: provectuslabs/kafka-ui:latest
-    container_name: edpo-kafka-ui
-    depends_on:
-      - kafka
+    container_name: cv-kafka-ui
     ports:
-      - "8080:8080"
+      - "8079:8080"
     environment:
       KAFKA_CLUSTERS_0_NAME: local
       KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:29092
-
-  postgres:
-    image: postgres:16-alpine
-    container_name: edpo-postgres
-    ports:
-      - "15432:5432"
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: postgres
-    volumes:
-      - ./db/init:/docker-entrypoint-initdb.d
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 5s
-      timeout: 5s
-      retries: 20
-
-  post-service:
-    build:
-      context: .
-      dockerfile: services/post-service/Dockerfile
-    container_name: edpo-post-service
     depends_on:
-      postgres:
-        condition: service_healthy
       kafka:
-        condition: service_started
-    ports:
-      - "8001:8001"
-    environment:
-      SERVICE_NAME: post-service
-      LOG_LEVEL: INFO
-      DB_DSN: postgresql://post_user:post_pass@postgres:5432/post_db
-      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
-      POST_EVENTS_TOPIC: social.post.events
-      INTERACTION_EVENTS_TOPIC: social.interaction.events
-
-  interaction-service:
-    build:
-      context: .
-      dockerfile: services/interaction-service/Dockerfile
-    container_name: edpo-interaction-service
-    depends_on:
-      postgres:
         condition: service_healthy
-      kafka:
-        condition: service_started
-    ports:
-      - "8002:8002"
-    environment:
-      SERVICE_NAME: interaction-service
-      LOG_LEVEL: INFO
-      DB_DSN: postgresql://interaction_user:interaction_pass@postgres:5432/interaction_db
-      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
-      INTERACTION_EVENTS_TOPIC: social.interaction.events
-
-  notification-service:
-    build:
-      context: .
-      dockerfile: services/notification-service/Dockerfile
-    container_name: edpo-notification-service
-    depends_on:
-      postgres:
-        condition: service_healthy
-      kafka:
-        condition: service_started
-      interaction-service:
-        condition: service_started
-    ports:
-      - "8003:8003"
-    environment:
-      SERVICE_NAME: notification-service
-      LOG_LEVEL: INFO
-      DB_DSN: postgresql://notification_user:notification_pass@postgres:5432/notification_db
-      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
-      INTERACTION_EVENTS_TOPIC: social.interaction.events
-      KAFKA_GROUP_ID: notification-service
-      KAFKA_AUTO_OFFSET_RESET: earliest
+    restart: unless-stopped
