@@ -15,7 +15,7 @@
       <bpmn:incoming>Flow_0iosoe7</bpmn:incoming>
       <bpmn:outgoing>Flow_1c1u014</bpmn:outgoing>
     </bpmn:userTask>
-    <bpmn:endEvent id="Event_0lz1s6r">
+    <bpmn:endEvent id="Event_0lz1s6r" name="End">
       <bpmn:incoming>Flow_00q6fbr</bpmn:incoming>
     </bpmn:endEvent>
     <bpmn:sequenceFlow id="Flow_00q6fbr" sourceRef="Gateway_0i99qby" targetRef="Event_0lz1s6r" />
@@ -40,24 +40,6 @@
     </bpmn:serviceTask>
     <bpmn:dataStoreReference id="DataStoreReference_1kx6lkz" name="User Database" />
     <bpmn:sequenceFlow id="Flow_0iosoe7" sourceRef="StartEvent_1" targetRef="Activity_1qokx0x" />
-    <bpmn:startEvent id="StartEvent_1">
-      <bpmn:extensionElements>
-        <zeebe:properties>
-          <zeebe:property name="inbound.type" value="io.camunda:webhook:1" />
-          <zeebe:property name="inbound.method" value="any" />
-          <zeebe:property name="inbound.context" value="" />
-          <zeebe:property name="inbound.shouldValidateHmac" value="disabled" />
-          <zeebe:property name="inbound.auth.type" value="NONE" />
-          <zeebe:property name="consumeUnmatchedEvents" value="true" />
-          <zeebe:property name="correlationRequired" value="notRequired" />
-          <zeebe:property name="deduplicationModeManualFlag" value="false" />
-          <zeebe:property name="deduplicationMode" value="AUTO" />
-          <zeebe:property name="resultVariable" value="" />
-          <zeebe:property name="resultExpression" value="" />
-        </zeebe:properties>
-      </bpmn:extensionElements>
-      <bpmn:outgoing>Flow_0iosoe7</bpmn:outgoing>
-    </bpmn:startEvent>
     <bpmn:serviceTask id="Activity_0xxkx82" name="Reject User">
       <bpmn:extensionElements>
         <zeebe:taskDefinition type="reject-user" />
@@ -71,6 +53,24 @@
       <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">=checkPassed = false</bpmn:conditionExpression>
     </bpmn:sequenceFlow>
     <bpmn:sequenceFlow id="Flow_1kjnjgk" sourceRef="Activity_0xxkx82" targetRef="Gateway_0i99qby" />
+    <bpmn:startEvent id="StartEvent_1" name="Start">
+      <bpmn:extensionElements>
+        <zeebe:properties>
+          <zeebe:property name="inbound.type" value="io.camunda:webhook:1" />
+          <zeebe:property name="inbound.method" value="any" />
+          <zeebe:property name="inbound.context" />
+          <zeebe:property name="inbound.shouldValidateHmac" value="disabled" />
+          <zeebe:property name="inbound.auth.type" value="NONE" />
+          <zeebe:property name="consumeUnmatchedEvents" value="true" />
+          <zeebe:property name="correlationRequired" value="notRequired" />
+          <zeebe:property name="deduplicationModeManualFlag" value="false" />
+          <zeebe:property name="deduplicationMode" value="AUTO" />
+          <zeebe:property name="resultVariable" />
+          <zeebe:property name="resultExpression" />
+        </zeebe:properties>
+      </bpmn:extensionElements>
+      <bpmn:outgoing>Flow_0iosoe7</bpmn:outgoing>
+    </bpmn:startEvent>
     <bpmn:textAnnotation id="TextAnnotation_1y20wr6">
       <bpmn:text>HTML, Something like:
 Name: ___
@@ -80,7 +80,7 @@ Are you Trustworthy: Yes/No</bpmn:text>
     </bpmn:textAnnotation>
     <bpmn:textAnnotation id="TextAnnotation_0cdwp6r">
       <bpmn:text>Unsure:
-User-Task -&gt; more orchestrated /
+User-Task -&gt; orchestrated /
 Service Task -&gt; choereographed</bpmn:text>
     </bpmn:textAnnotation>
     <bpmn:association id="Association_1ov7dw2" associationDirection="None" sourceRef="Activity_1qokx0x" targetRef="TextAnnotation_0cdwp6r" />
@@ -90,31 +90,38 @@ Checkbox for Background check done</bpmn:text>
     </bpmn:textAnnotation>
     <bpmn:association id="Association_1sjt7f6" associationDirection="None" sourceRef="Activity_1qokx0x" targetRef="TextAnnotation_11vgei3" />
     <bpmn:association id="Association_0r8r1yr" associationDirection="None" sourceRef="TextAnnotation_1y20wr6" targetRef="StartEvent_1" />
+    <bpmn:textAnnotation id="TextAnnotation_0ph71gd">
+      <bpmn:text>Also emits event to inform notification-service to send a notification to user</bpmn:text>
+    </bpmn:textAnnotation>
+    <bpmn:association id="Association_1892m63" associationDirection="None" sourceRef="Activity_025mme0" targetRef="TextAnnotation_0ph71gd" />
+    <bpmn:textAnnotation id="TextAnnotation_11tldqe">
+      <bpmn:text>Also emits event to inform notification-service to send a notification to user</bpmn:text>
+    </bpmn:textAnnotation>
+    <bpmn:association id="Association_0id4xaa" associationDirection="None" sourceRef="Activity_0xxkx82" targetRef="TextAnnotation_11tldqe" />
   </bpmn:process>
   <bpmndi:BPMNDiagram id="BPMNDiagram_1">
     <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="Process_1kwkl0j">
-      <bpmndi:BPMNShape id="Event_0lz1s6r_di" bpmnElement="Event_0lz1s6r">
-        <dc:Bounds x="1122" y="372" width="36" height="36" />
-      </bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="Activity_0fbvlh0_di" bpmnElement="Activity_1qokx0x">
-        <dc:Bounds x="410" y="350" width="100" height="80" />
-      </bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="Event_0yiubx1_di" bpmnElement="StartEvent_1">
-        <dc:Bounds x="232" y="372" width="36" height="36" />
-      </bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="Activity_1qcb4nj_di" bpmnElement="Activity_025mme0">
-        <dc:Bounds x="740" y="350" width="100" height="80" />
-        <bpmndi:BPMNLabel />
-      </bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="BPMNShape_1a7hwqa" bpmnElement="Activity_0xxkx82">
-        <dc:Bounds x="740" y="220" width="100" height="80" />
-        <bpmndi:BPMNLabel />
-      </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="Gateway_1sxul1z_di" bpmnElement="Gateway_1sxul1z" isMarkerVisible="true">
         <dc:Bounds x="575" y="365" width="50" height="50" />
         <bpmndi:BPMNLabel>
           <dc:Bounds x="562" y="422" width="76" height="14" />
         </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_0fbvlh0_di" bpmnElement="Activity_1qokx0x">
+        <dc:Bounds x="410" y="350" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Event_0lz1s6r_di" bpmnElement="Event_0lz1s6r">
+        <dc:Bounds x="1122" y="372" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1130" y="415" width="20" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Gateway_0i99qby_di" bpmnElement="Gateway_0i99qby" isMarkerVisible="true">
+        <dc:Bounds x="955" y="365" width="50" height="50" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_1qcb4nj_di" bpmnElement="Activity_025mme0">
+        <dc:Bounds x="740" y="350" width="100" height="80" />
+        <bpmndi:BPMNLabel />
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="DataStoreReference_1kx6lkz_di" bpmnElement="DataStoreReference_1kx6lkz">
         <dc:Bounds x="765" y="495" width="50" height="50" />
@@ -122,24 +129,39 @@ Checkbox for Background check done</bpmn:text>
           <dc:Bounds x="753" y="555" width="74" height="14" />
         </bpmndi:BPMNLabel>
       </bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="Gateway_0i99qby_di" bpmnElement="Gateway_0i99qby" isMarkerVisible="true">
-        <dc:Bounds x="955" y="365" width="50" height="50" />
+      <bpmndi:BPMNShape id="BPMNShape_1a7hwqa" bpmnElement="Activity_0xxkx82">
+        <dc:Bounds x="740" y="220" width="100" height="80" />
+        <bpmndi:BPMNLabel />
       </bpmndi:BPMNShape>
-      <bpmndi:BPMNEdge id="Association_0r8r1yr_di" bpmnElement="Association_0r8r1yr">
-        <di:waypoint x="250" y="312" />
-        <di:waypoint x="250" y="372" />
+      <bpmndi:BPMNShape id="Event_0w4c9bp_di" bpmnElement="StartEvent_1">
+        <dc:Bounds x="232" y="372" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="238" y="415" width="24" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="Association_0id4xaa_di" bpmnElement="Association_0id4xaa">
+        <di:waypoint x="790" y="220" />
+        <di:waypoint x="790" y="180" />
       </bpmndi:BPMNEdge>
-      <bpmndi:BPMNShape id="TextAnnotation_0cdwp6r_di" bpmnElement="TextAnnotation_0cdwp6r">
-        <dc:Bounds x="410" y="80" width="215" height="55" />
+      <bpmndi:BPMNEdge id="Association_1892m63_di" bpmnElement="Association_1892m63">
+        <di:waypoint x="833" y="429" />
+        <di:waypoint x="894" y="485" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Association_1ov7dw2_di" bpmnElement="Association_1ov7dw2">
+        <di:waypoint x="460" y="350" />
+        <di:waypoint x="460" y="216" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNShape id="TextAnnotation_1y20wr6_di" bpmnElement="TextAnnotation_1y20wr6">
+        <dc:Bounds x="153" y="228" width="194" height="84" />
         <bpmndi:BPMNLabel />
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="TextAnnotation_11vgei3_di" bpmnElement="TextAnnotation_11vgei3">
         <dc:Bounds x="400" y="485" width="155" height="70" />
         <bpmndi:BPMNLabel />
       </bpmndi:BPMNShape>
-      <bpmndi:BPMNEdge id="DataOutputAssociation_06xl6ph_di" bpmnElement="DataOutputAssociation_06xl6ph">
-        <di:waypoint x="790" y="430" />
-        <di:waypoint x="790" y="495" />
+      <bpmndi:BPMNEdge id="Flow_00q6fbr_di" bpmnElement="Flow_00q6fbr">
+        <di:waypoint x="1005" y="390" />
+        <di:waypoint x="1122" y="390" />
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="Flow_1c1u014_di" bpmnElement="Flow_1c1u014">
         <di:waypoint x="510" y="390" />
@@ -152,26 +174,14 @@ Checkbox for Background check done</bpmn:text>
           <dc:Bounds x="607" y="315" width="15" height="14" />
         </bpmndi:BPMNLabel>
       </bpmndi:BPMNEdge>
-      <bpmndi:BPMNEdge id="Flow_00q6fbr_di" bpmnElement="Flow_00q6fbr">
-        <di:waypoint x="1005" y="390" />
-        <di:waypoint x="1122" y="390" />
-      </bpmndi:BPMNEdge>
-      <bpmndi:BPMNEdge id="Association_1ov7dw2_di" bpmnElement="Association_1ov7dw2">
-        <di:waypoint x="460" y="350" />
-        <di:waypoint x="460" y="135" />
-      </bpmndi:BPMNEdge>
-      <bpmndi:BPMNEdge id="Association_1sjt7f6_di" bpmnElement="Association_1sjt7f6">
-        <di:waypoint x="460" y="430" />
-        <di:waypoint x="460" y="485" />
+      <bpmndi:BPMNEdge id="DataOutputAssociation_06xl6ph_di" bpmnElement="DataOutputAssociation_06xl6ph">
+        <di:waypoint x="790" y="430" />
+        <di:waypoint x="790" y="495" />
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="Flow_0iosoe7_di" bpmnElement="Flow_0iosoe7">
         <di:waypoint x="268" y="390" />
         <di:waypoint x="410" y="390" />
       </bpmndi:BPMNEdge>
-      <bpmndi:BPMNShape id="TextAnnotation_1y20wr6_di" bpmnElement="TextAnnotation_1y20wr6">
-        <dc:Bounds x="153" y="228" width="194" height="84" />
-        <bpmndi:BPMNLabel />
-      </bpmndi:BPMNShape>
       <bpmndi:BPMNEdge id="Flow_1i1r7yg_di" bpmnElement="Flow_1i1r7yg">
         <di:waypoint x="840" y="390" />
         <di:waypoint x="955" y="390" />
@@ -186,6 +196,26 @@ Checkbox for Background check done</bpmn:text>
         <di:waypoint x="980" y="260" />
         <di:waypoint x="980" y="365" />
       </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Association_1sjt7f6_di" bpmnElement="Association_1sjt7f6">
+        <di:waypoint x="460" y="430" />
+        <di:waypoint x="460" y="485" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Association_0r8r1yr_di" bpmnElement="Association_0r8r1yr">
+        <di:waypoint x="250" y="312" />
+        <di:waypoint x="250" y="372" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNShape id="TextAnnotation_11tldqe_di" bpmnElement="TextAnnotation_11tldqe">
+        <dc:Bounds x="740" y="110" width="120" height="70" />
+        <bpmndi:BPMNLabel />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="TextAnnotation_0ph71gd_di" bpmnElement="TextAnnotation_0ph71gd">
+        <dc:Bounds x="860" y="485" width="120" height="70" />
+        <bpmndi:BPMNLabel />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="TextAnnotation_0cdwp6r_di" bpmnElement="TextAnnotation_0cdwp6r">
+        <dc:Bounds x="410" y="160" width="214.9934668989547" height="55.749128919860624" />
+        <bpmndi:BPMNLabel />
+      </bpmndi:BPMNShape>
     </bpmndi:BPMNPlane>
   </bpmndi:BPMNDiagram>
 </bpmn:definitions>
