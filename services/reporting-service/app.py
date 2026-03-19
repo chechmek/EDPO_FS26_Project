@@ -39,6 +39,16 @@ REPORT_CONTENT_PROCESS_ID = "Process_0rsygf3"  # id from ReportContent.bpmn
 # key: report_id → { "reporterId", "contentId", "status", "processInstanceKey" }
 _reports: dict[str, dict] = {}
 
+# Shared event loop owned by the worker thread — request handlers submit to it
+_loop: asyncio.AbstractEventLoop | None = None
+_loop_ready = threading.Event()
+
+
+def _zeebe_call(coro):
+    """Submit a coroutine to the shared worker loop and block until done."""
+    _loop_ready.wait()
+    return asyncio.run_coroutine_threadsafe(coro, _loop).result()
+
 
 # ---------------------------------------------------------------------------
 # REST
@@ -67,6 +77,7 @@ def submit_report():
         "reporterId": reporter_id,
         "contentId": content_id,
         "reason": body.get("reason", ""),
+        "validReport": body.get("validReport", True),
     }
 
     async def _start():
@@ -76,9 +87,7 @@ def submit_report():
         await channel.close()
         return instance.process_instance_key
 
-    loop = asyncio.new_event_loop()
-    key = loop.run_until_complete(_start())
-    loop.close()
+    key = _zeebe_call(_start())
 
     _reports[report_id] = {
         "reporterId": reporter_id,
@@ -125,9 +134,7 @@ def submit_objection(report_id):
         )
         await channel.close()
 
-    loop = asyncio.new_event_loop()
-    loop.run_until_complete(_pub())
-    loop.close()
+    _zeebe_call(_pub())
 
     record["status"] = "objection-received"
     return jsonify({"received": True}), 200
@@ -138,6 +145,10 @@ def submit_objection(report_id):
 # ---------------------------------------------------------------------------
 
 async def _run_workers():
+    global _loop
+    _loop = asyncio.get_running_loop()
+    _loop_ready.set()
+
     channel = create_insecure_channel(grpc_address=ZEEBE_ADDRESS)
     worker = ZeebeWorker(channel)
 

@@ -45,6 +45,16 @@ VERIFY_CONTENT_PROCESS_ID = "Process_01gn4xr"  # id from VerifyContent.bpmn
 # key: verification_id → { "userId", "contentUrl", "status", "processInstanceKey", "peerVerdicts": [] }
 _verifications: dict[str, dict] = {}
 
+# Shared event loop owned by the worker thread — request handlers submit to it
+_loop: asyncio.AbstractEventLoop | None = None
+_loop_ready = threading.Event()
+
+
+def _zeebe_call(coro):
+    """Submit a coroutine to the shared worker loop and block until done."""
+    _loop_ready.wait()
+    return asyncio.run_coroutine_threadsafe(coro, _loop).result()
+
 
 # ---------------------------------------------------------------------------
 # REST
@@ -82,9 +92,7 @@ def start_verification():
         await channel.close()
         return instance.process_instance_key
 
-    loop = asyncio.new_event_loop()
-    key = loop.run_until_complete(_start())
-    loop.close()
+    key = _zeebe_call(_start())
 
     _verifications[verification_id] = {
         "userId": user_id,
@@ -148,9 +156,7 @@ def _publish_camunda_message(name: str, correlation_key: str, variables: dict):
         )
         await channel.close()
 
-    loop = asyncio.new_event_loop()
-    loop.run_until_complete(_pub())
-    loop.close()
+    _zeebe_call(_pub())
 
 
 # ---------------------------------------------------------------------------
@@ -158,6 +164,10 @@ def _publish_camunda_message(name: str, correlation_key: str, variables: dict):
 # ---------------------------------------------------------------------------
 
 async def _run_workers():
+    global _loop
+    _loop = asyncio.get_running_loop()
+    _loop_ready.set()
+
     channel = create_insecure_channel(grpc_address=ZEEBE_ADDRESS)
     worker = ZeebeWorker(channel)
 

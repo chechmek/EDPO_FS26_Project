@@ -1,0 +1,20 @@
+{
+  "id": "verify-user",
+  "schemaVersion": 12,
+  "components": [
+    {
+      "type": "text",
+      "id": "instructions",
+      "text": "## Background Check\n\nReview the registration request and indicate whether the background check has passed."
+    },
+    {
+      "type": "checkbox",
+      "id": "checkPassed",
+      "key": "checkPassed",
+      "label": "Background check passed"
+    }
+  ],
+  "type": "default",
+  "executionPlatform": "Camunda Cloud",
+  "executionPlatformVersion": "8.8.0"
+}

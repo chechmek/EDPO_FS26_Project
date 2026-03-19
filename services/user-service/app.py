@@ -33,6 +33,16 @@ REGISTER_USER_PROCESS_ID = "Process_1kwkl0j"  # id from RegisterUser.bpmn
 # In-memory store — replace with a real DB
 _users: dict[str, dict] = {}
 
+# Shared event loop owned by the worker thread — request handlers submit to it
+_loop: asyncio.AbstractEventLoop | None = None
+_loop_ready = threading.Event()
+
+
+def _zeebe_call(coro):
+    """Submit a coroutine to the shared worker loop and block until done."""
+    _loop_ready.wait()
+    return asyncio.run_coroutine_threadsafe(coro, _loop).result()
+
 
 # ---------------------------------------------------------------------------
 # REST
@@ -67,10 +77,7 @@ def register_user():
         await channel.close()
         return instance.process_instance_key
 
-    loop = asyncio.new_event_loop()
-    key = loop.run_until_complete(_start())
-    loop.close()
-
+    key = _zeebe_call(_start())
     return jsonify({"processInstanceKey": key, "message": "Registration process started"}), 202
 
 
@@ -92,6 +99,10 @@ def get_user(user_id):
 # ---------------------------------------------------------------------------
 
 async def _run_workers():
+    global _loop
+    _loop = asyncio.get_running_loop()
+    _loop_ready.set()
+
     channel = create_insecure_channel(grpc_address=ZEEBE_ADDRESS)
     worker = ZeebeWorker(channel)
 
@@ -108,15 +119,16 @@ async def _run_workers():
         _users[user_id] = {"username": username}
         return {"userId": user_id, "registered": True}
 
-    @worker.task(task_type="send-registration-notification")
-    async def handle_send_notification(userId: str, success: bool = True, **kwargs) -> dict:
+    @worker.task(task_type="reject-user")
+    async def handle_reject_user(username: str, **kwargs) -> dict:
         """
-        Sends success or rejection notification to the user.
+        Handles a rejection of user .
         Input variables:  userId, success (bool)
         """
-        status = "approved" if success else "rejected"
-        log.info("[send-registration-notification] userId=%s status=%s", userId, status)
-        # TODO: send email / push notification
+        log.info("[reject-user] username=%s", username)
+
+        # TODO: publish "user rejected event"
+
         return {}
 
     log.info("Zeebe workers started, connecting to %s", ZEEBE_ADDRESS)
