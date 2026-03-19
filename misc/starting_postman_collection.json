@@ -1,0 +1,242 @@
+{
+  "info": {
+    "name": "Content Verification Platform",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "user_service",         "value": "http://localhost:8001" },
+    { "key": "verification_service", "value": "http://localhost:8002" },
+    { "key": "reporting_service",    "value": "http://localhost:8003" },
+    { "key": "attestation_service",  "value": "http://localhost:8004" },
+    { "key": "user_id",              "value": "" },
+    { "key": "verification_id",      "value": "" },
+    { "key": "report_id",            "value": "" },
+    { "key": "attestation_id",       "value": "" }
+  ],
+  "item": [
+
+    {
+      "name": "User Service",
+      "item": [
+        {
+          "name": "Health",
+          "request": {
+            "method": "GET",
+            "url": "{{user_service}}/health"
+          }
+        },
+        {
+          "name": "Register User",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var json = pm.response.json();",
+                  "if (json.processInstanceKey) {",
+                  "  pm.collectionVariables.set('user_id', json.processInstanceKey);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{user_service}}/users",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"alice\",\n  \"password\": \"secret\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Get User",
+          "request": {
+            "method": "GET",
+            "url": "{{user_service}}/users/{{user_id}}"
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "Verification Service",
+      "item": [
+        {
+          "name": "Health",
+          "request": {
+            "method": "GET",
+            "url": "{{verification_service}}/health"
+          }
+        },
+        {
+          "name": "Start Verification",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var json = pm.response.json();",
+                  "if (json.verificationId) {",
+                  "  pm.collectionVariables.set('verification_id', json.verificationId);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{verification_service}}/verifications",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userId\": \"{{user_id}}\",\n  \"contentUrl\": \"https://example.com/article/1\",\n  \"contentTitle\": \"My Article\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Get Verification",
+          "request": {
+            "method": "GET",
+            "url": "{{verification_service}}/verifications/{{verification_id}}"
+          }
+        },
+        {
+          "name": "Submit Peer Response (approve)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{verification_service}}/verifications/{{verification_id}}/peer-response",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"peerId\": \"peer-001\",\n  \"approved\": true,\n  \"reason\": \"Content looks accurate\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Submit Peer Response (reject)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{verification_service}}/verifications/{{verification_id}}/peer-response",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"peerId\": \"peer-002\",\n  \"approved\": false,\n  \"reason\": \"Factual errors detected\"\n}"
+            }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "Reporting Service",
+      "item": [
+        {
+          "name": "Health",
+          "request": {
+            "method": "GET",
+            "url": "{{reporting_service}}/health"
+          }
+        },
+        {
+          "name": "Submit Report",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var json = pm.response.json();",
+                  "if (json.reportId) {",
+                  "  pm.collectionVariables.set('report_id', json.reportId);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{reporting_service}}/reports",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reporterId\": \"{{user_id}}\",\n  \"contentId\": \"content-abc123\",\n  \"reason\": \"Misinformation\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Get Report",
+          "request": {
+            "method": "GET",
+            "url": "{{reporting_service}}/reports/{{report_id}}"
+          }
+        },
+        {
+          "name": "Submit Objection",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{reporting_service}}/reports/{{report_id}}/objection",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"ownerId\": \"{{user_id}}\",\n  \"explanation\": \"The content is factually correct, sources provided.\"\n}"
+            }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "Attestation Service",
+      "item": [
+        {
+          "name": "Health",
+          "request": {
+            "method": "GET",
+            "url": "{{attestation_service}}/health"
+          }
+        },
+        {
+          "name": "Register Attestation",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var json = pm.response.json();",
+                  "if (json.attestationId) {",
+                  "  pm.collectionVariables.set('attestation_id', json.attestationId);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{attestation_service}}/attestations",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"contentUrl\": \"https://example.com/article/1\",\n  \"signatureId\": \"sig-abc123\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Get Attestation",
+          "request": {
+            "method": "GET",
+            "url": "{{attestation_service}}/attestations/{{attestation_id}}"
+          }
+        },
+        {
+          "name": "Delete Attestation",
+          "request": {
+            "method": "DELETE",
+            "url": "{{attestation_service}}/attestations/{{attestation_id}}"
+          }
+        }
+      ]
+    }
+
+  ]
+}
