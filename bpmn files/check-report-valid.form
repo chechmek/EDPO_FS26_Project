@@ -1,0 +1,20 @@
+{
+  "id": "check-report-valid",
+  "schemaVersion": 16,
+  "components": [
+    {
+      "type": "text",
+      "id": "instructions",
+      "text": "## Check Report Validity\n\nReview the submitted content report and determine whether it describes a genuine policy violation."
+    },
+    {
+      "type": "checkbox",
+      "id": "report_valid_field",
+      "key": "report_valid",
+      "label": "Report is Valid"
+    }
+  ],
+  "type": "default",
+  "executionPlatform": "Camunda Cloud",
+  "executionPlatformVersion": "8.8.0"
+}

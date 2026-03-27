@@ -1,0 +1,20 @@
+{
+  "id": "review-objection",
+  "schemaVersion": 16,
+  "components": [
+    {
+      "type": "text",
+      "id": "instructions",
+      "text": "## Review Objection\n\nThe post owner has objected to this report. Review their objection and determine whether it should be rejected (post is deleted) or upheld (post remains)."
+    },
+    {
+      "type": "checkbox",
+      "id": "objection_rejected_field",
+      "key": "objection_rejected",
+      "label": "Reject Objection"
+    }
+  ],
+  "type": "default",
+  "executionPlatform": "Camunda Cloud",
+  "executionPlatformVersion": "8.8.0"
+}
