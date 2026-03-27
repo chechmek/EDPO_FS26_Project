@@ -49,3 +49,14 @@ services:
     networks: [infra]
     restart: unless-stopped
 
+  notification-service:
+    build: ./services/notification-service
+    container_name: cv-notification-service
+    ports:
+      - "8005:8005"
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      KAFKA_GROUP_ID: notification-service
+    networks: [infra]
+    restart: unless-stopped
+
