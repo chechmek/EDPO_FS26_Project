@@ -30,7 +30,7 @@ app = Flask(__name__)
 
 KAFKA_BOOTSTRAP_SERVERS = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "kafka:29092")
 KAFKA_GROUP_ID = os.getenv("KAFKA_GROUP_ID", "notification-service")
-TOPICS = ["objection-approved", "post-deleted"]
+TOPICS = ["objection-approved", "post-deleted", "user-registered", "user-rejected"]
 
 # In-memory store: user_id → [{ type, message, payload }]
 # Replace with DB inserts into the notifications table in production.
@@ -91,9 +91,43 @@ def handle_post_deleted(payload: dict):
         )
 
 
+def handle_user_registered(payload: dict):
+    """
+    User registration was approved after background check.
+    Expected payload: { userId }
+    """
+    user_id = payload.get("userId")
+    log.info("[user-registered] userId=%s", user_id)
+    if user_id:
+        _store(
+            user_id,
+            "user-registered",
+            "Your registration was approved. Welcome!",
+            payload,
+        )
+
+
+def handle_user_rejected(payload: dict):
+    """
+    User registration was rejected after background check.
+    Expected payload: { userId }
+    """
+    user_id = payload.get("userId")
+    log.info("[user-rejected] userId=%s", user_id)
+    if user_id:
+        _store(
+            user_id,
+            "user-rejected",
+            "Your registration was not approved following the background check.",
+            payload,
+        )
+
+
 HANDLERS = {
     "objection-approved": handle_objection_approved,
     "post-deleted": handle_post_deleted,
+    "user-registered": handle_user_registered,
+    "user-rejected": handle_user_rejected,
 }
 
 
