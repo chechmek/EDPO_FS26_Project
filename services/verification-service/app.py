@@ -68,7 +68,8 @@ def health():
 @app.post("/verifications")
 def start_verification():
     """
-    Starts the VerifyContent Camunda process.
+    Starts the VerifyContent Camunda process. Returns 202 immediately.
+    User registration is checked by the process itself — poll GET /verifications/<id> for the outcome.
     Body: { "userId": "...", "contentUrl": "...", "contentTitle": "..." }
     """
     body = request.get_json(force=True)
@@ -172,18 +173,20 @@ async def _run_workers():
     worker = ZeebeWorker(channel)
 
     @worker.task(task_type="check-user-registration")
-    async def handle_check_registration(userId: str, **kwargs) -> dict:
+    async def handle_check_registration(verificationId: str, userId: str, **kwargs) -> dict:
         """
         Calls user-service to verify the requester is a registered user.
         Output variables: userRegistered (bool)
         """
-        log.info("[check-user-registration] userId=%s", userId)
+        log.info("[check-user-registration] verificationId=%s userId=%s", verificationId, userId)
         try:
             resp = http.get(f"{USER_SERVICE_URL}/users/{userId}", timeout=5)
             registered = resp.status_code == 200 and resp.json().get("registered", False)
         except Exception as exc:
             log.warning("[check-user-registration] user-service unreachable: %s", exc)
             registered = False
+        if not registered and verificationId in _verifications:
+            _verifications[verificationId]["status"] = "rejected-unregistered"
         return {"userRegistered": registered}
 
     @worker.task(task_type="send-verification-request")
