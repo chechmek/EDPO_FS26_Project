@@ -6,12 +6,14 @@ Post owners can submit objections which are correlated back to the waiting insta
 """
 
 import asyncio
+import json
 import logging
 import os
 import threading
 import uuid
 from typing import Any
 
+from confluent_kafka import Producer
 import requests as http
 from flask import Flask, jsonify, request
 from pyzeebe import ZeebeClient, ZeebeWorker, create_insecure_channel
@@ -23,6 +25,7 @@ app = Flask(__name__)
 
 ZEEBE_ADDRESS = os.getenv("ZEEBE_ADDRESS", "zeebe:26500")
 NOTIFICATION_SERVICE_URL = os.getenv("NOTIFICATION_SERVICE_URL", "http://notification-service:8005")
+KAFKA_BOOTSTRAP_SERVERS = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "kafka:29092")
 REPORT_CONTENT_PROCESS_ID = "Process_0rsygf3"
 
 _reports: dict[str, dict[str, Any]] = {}
@@ -31,6 +34,8 @@ _lock = threading.Lock()
 
 _loop: asyncio.AbstractEventLoop | None = None
 _loop_ready = threading.Event()
+_producer: Producer | None = None
+_producer_lock = threading.Lock()
 
 _OBJECTION_MODES = {"manual", "auto-object", "auto-silent"}
 
@@ -47,6 +52,27 @@ def _coerce_float(value: Any, default: float, *, minimum: float = 0.0) -> float:
     except (TypeError, ValueError):
         number = default
     return max(minimum, number)
+
+
+def _get_producer() -> Producer:
+    global _producer
+    with _producer_lock:
+        if _producer is None:
+            _producer = Producer(
+                {
+                    "bootstrap.servers": KAFKA_BOOTSTRAP_SERVERS,
+                    "client.id": "reporting-service",
+                    "acks": "all",
+                    "enable.idempotence": True,
+                }
+            )
+    return _producer
+
+
+def _publish_event(topic: str, key: str, payload: dict[str, Any]) -> None:
+    producer = _get_producer()
+    producer.produce(topic=topic, key=key.encode("utf-8"), value=json.dumps(payload))
+    producer.flush(5.0)
 
 
 def _get_report(report_id: str) -> dict[str, Any] | None:
@@ -280,6 +306,20 @@ async def _run_workers():
             if reportId in _reports:
                 _reports[reportId]["status"] = "deleted"
         return {"deleted": True}
+
+    @worker.task(task_type="publish-objection-approved")
+    async def handle_publish_objection_approved(reportId: str, postId: str, postOwnerId: str, **kwargs) -> dict:
+        payload = {"reportId": reportId, "postId": postId, "postOwnerId": postOwnerId}
+        _publish_event("objection-approved", reportId, payload)
+        log.info("[publish-objection-approved] reportId=%s postId=%s", reportId, postId)
+        return {}
+
+    @worker.task(task_type="publish-post-deleted")
+    async def handle_publish_post_deleted(reportId: str, postId: str, postOwnerId: str, **kwargs) -> dict:
+        payload = {"reportId": reportId, "postId": postId, "postOwnerId": postOwnerId}
+        _publish_event("post-deleted", postId, payload)
+        log.info("[publish-post-deleted] reportId=%s postId=%s", reportId, postId)
+        return {}
 
     log.info("Zeebe workers started, connecting to %s", ZEEBE_ADDRESS)
     await worker.work()

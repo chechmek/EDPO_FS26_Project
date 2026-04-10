@@ -14,12 +14,14 @@ REST endpoints:
 """
 
 import asyncio
+import json
 import logging
 import os
 import threading
 import uuid
 from typing import Any
 
+from confluent_kafka import Producer
 from flask import Flask, jsonify, request
 from pyzeebe import ZeebeClient, ZeebeWorker, create_insecure_channel
 
@@ -29,6 +31,7 @@ log = logging.getLogger("user-service")
 app = Flask(__name__)
 
 ZEEBE_ADDRESS = os.getenv("ZEEBE_ADDRESS", "zeebe:26500")
+KAFKA_BOOTSTRAP_SERVERS = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "kafka:29092")
 REGISTER_USER_PROCESS_ID = "Process_1kwkl0j"
 
 _users: dict[str, dict[str, Any]] = {}
@@ -36,6 +39,8 @@ _lock = threading.Lock()
 
 _loop: asyncio.AbstractEventLoop | None = None
 _loop_ready = threading.Event()
+_producer: Producer | None = None
+_producer_lock = threading.Lock()
 
 
 def _zeebe_call(coro):
@@ -50,6 +55,27 @@ def _coerce_bool(value: Any) -> bool:
     if isinstance(value, str):
         return value.strip().lower() in {"1", "true", "yes", "on"}
     return bool(value)
+
+
+def _get_producer() -> Producer:
+    global _producer
+    with _producer_lock:
+        if _producer is None:
+            _producer = Producer(
+                {
+                    "bootstrap.servers": KAFKA_BOOTSTRAP_SERVERS,
+                    "client.id": "user-service",
+                    "acks": "all",
+                    "enable.idempotence": True,
+                }
+            )
+    return _producer
+
+
+def _publish_event(topic: str, key: str, payload: dict[str, Any]) -> None:
+    producer = _get_producer()
+    producer.produce(topic=topic, key=key.encode("utf-8"), value=json.dumps(payload))
+    producer.flush(5.0)
 
 
 def _get_user(user_id: str) -> dict[str, Any] | None:
@@ -153,6 +179,10 @@ async def _run_workers():
             status="registered",
             rejectionReason=None,
         )
+        
+        _publish_event("user-registered", userId, {"userId": userId})
+        log.info("[publish-user-registered] userId=%s", userId)
+        
         return {"userId": userId, "registered": True}
 
     @worker.task(task_type="reject-user")
@@ -170,6 +200,10 @@ async def _run_workers():
             status="rejected",
             rejectionReason="Background check failed",
         )
+        
+        _publish_event("user-rejected", userId, {"userId": userId})
+        log.info("[publish-user-rejected] userId=%s", userId)
+        
         return {"userId": userId, "registered": False}
 
     log.info("Zeebe workers started, connecting to %s", ZEEBE_ADDRESS)

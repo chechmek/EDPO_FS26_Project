@@ -12,6 +12,7 @@ services:
       - "8001:8001"
     environment:
       ZEEBE_ADDRESS: host.docker.internal:26500
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
     networks: [infra]
     restart: unless-stopped
 
@@ -43,6 +44,7 @@ services:
     environment:
       ZEEBE_ADDRESS: host.docker.internal:26500
       NOTIFICATION_SERVICE_URL: http://notification-service:8005
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
     depends_on:
       notification-service:
         condition: service_started
