@@ -108,7 +108,7 @@
       <bpmn:extensionElements>
         <zeebe:taskDefinition type="io.camunda:connector-kafka:1" retries="3" />
         <zeebe:ioMapping>
-          <zeebe:input source="kafka:29092" target="topic.bootstrapServers" />
+          <zeebe:input source="localhost:9092" target="topic.bootstrapServers" />
           <zeebe:input source="objection-approved" target="topic.topicName" />
           <zeebe:input source="noSchema" target="schemaStrategy.type" />
           <zeebe:input source="=string(reportId)" target="message.key" />
@@ -131,7 +131,7 @@
       <bpmn:extensionElements>
         <zeebe:taskDefinition type="io.camunda:connector-kafka:1" retries="3" />
         <zeebe:ioMapping>
-          <zeebe:input source="kafka:29092" target="topic.bootstrapServers" />
+          <zeebe:input source="localhost:9092" target="topic.bootstrapServers" />
           <zeebe:input source="post-deleted" target="topic.topicName" />
           <zeebe:input source="noSchema" target="schemaStrategy.type" />
           <zeebe:input source="=string(postId)" target="message.key" />

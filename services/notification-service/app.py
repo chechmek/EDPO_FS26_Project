@@ -1,18 +1,11 @@
 """
 Notification Service
 ====================
-Kafka subscriber that reacts to content moderation outcomes emitted by
-Camunda's Kafka outbound connectors in the ReportContent.bpmn process.
+Stores notifications in memory.
 
-Topics consumed:
-  - objection-approved   → post owner's objection was upheld; post remains
-  - post-deleted         → post was removed after moderation
-
-Each event creates a notification record for the post owner.
-
-REST endpoints:
-  GET /notifications/<user_id>   → list notifications for a user
-  GET /health
+It supports two ingress paths:
+  - Kafka topics emitted by Camunda Kafka connectors
+  - direct internal HTTP writes from other services
 """
 
 import json
@@ -21,7 +14,7 @@ import os
 import threading
 
 from confluent_kafka import Consumer, KafkaError
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(name)s] %(levelname)s %(message)s")
 log = logging.getLogger("notification-service")
@@ -32,36 +25,26 @@ KAFKA_BOOTSTRAP_SERVERS = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "kafka:29092")
 KAFKA_GROUP_ID = os.getenv("KAFKA_GROUP_ID", "notification-service")
 TOPICS = ["objection-approved", "post-deleted", "user-registered", "user-rejected"]
 
-# In-memory store: user_id → [{ type, message, payload }]
-# Replace with DB inserts into the notifications table in production.
 _notifications: dict[str, list] = {}
 _lock = threading.Lock()
 
 
 def _store(user_id: str, notif_type: str, message: str, payload: dict):
     with _lock:
-        _notifications.setdefault(user_id, []).append({
-            "type": notif_type,
-            "message": message,
-            "payload": payload,
-        })
+        _notifications.setdefault(user_id, []).append(
+            {
+                "type": notif_type,
+                "message": message,
+                "payload": payload,
+            }
+        )
 
-
-# ---------------------------------------------------------------------------
-# Event handlers — one per subscribed topic
-# ---------------------------------------------------------------------------
 
 def handle_objection_approved(payload: dict):
-    """
-    The post owner's objection was upheld by the moderator.
-    Their post was not deleted.
-    Expected payload: { reportId, postId, postOwnerId }
-    """
     post_owner_id = payload.get("postOwnerId")
-    post_id = payload.get("postId")
     report_id = payload.get("reportId")
-    log.info("[objection-approved] postOwnerId=%s postId=%s reportId=%s",
-             post_owner_id, post_id, report_id)
+    post_id = payload.get("postId")
+    log.info("[objection-approved] postOwnerId=%s postId=%s reportId=%s", post_owner_id, post_id, report_id)
     if post_owner_id:
         _store(
             post_owner_id,
@@ -72,16 +55,10 @@ def handle_objection_approved(payload: dict):
 
 
 def handle_post_deleted(payload: dict):
-    """
-    A post was removed after moderation — either the deadline passed with
-    no objection, or the moderator rejected the objection.
-    Expected payload: { reportId, postId, postOwnerId }
-    """
     post_owner_id = payload.get("postOwnerId")
-    post_id = payload.get("postId")
     report_id = payload.get("reportId")
-    log.info("[post-deleted] postOwnerId=%s postId=%s reportId=%s",
-             post_owner_id, post_id, report_id)
+    post_id = payload.get("postId")
+    log.info("[post-deleted] postOwnerId=%s postId=%s reportId=%s", post_owner_id, post_id, report_id)
     if post_owner_id:
         _store(
             post_owner_id,
@@ -92,10 +69,6 @@ def handle_post_deleted(payload: dict):
 
 
 def handle_user_registered(payload: dict):
-    """
-    User registration was approved after background check.
-    Expected payload: { userId }
-    """
     user_id = payload.get("userId")
     log.info("[user-registered] userId=%s", user_id)
     if user_id:
@@ -108,10 +81,6 @@ def handle_user_registered(payload: dict):
 
 
 def handle_user_rejected(payload: dict):
-    """
-    User registration was rejected after background check.
-    Expected payload: { userId }
-    """
     user_id = payload.get("userId")
     log.info("[user-rejected] userId=%s", user_id)
     if user_id:
@@ -131,17 +100,15 @@ HANDLERS = {
 }
 
 
-# ---------------------------------------------------------------------------
-# Kafka consumer loop
-# ---------------------------------------------------------------------------
-
 def _consume():
-    consumer = Consumer({
-        "bootstrap.servers": KAFKA_BOOTSTRAP_SERVERS,
-        "group.id": KAFKA_GROUP_ID,
-        "auto.offset.reset": "earliest",
-        "enable.auto.commit": False,
-    })
+    consumer = Consumer(
+        {
+            "bootstrap.servers": KAFKA_BOOTSTRAP_SERVERS,
+            "group.id": KAFKA_GROUP_ID,
+            "auto.offset.reset": "earliest",
+            "enable.auto.commit": False,
+        }
+    )
     consumer.subscribe(TOPICS)
     log.info("Kafka consumer started, subscribed to %s on %s", TOPICS, KAFKA_BOOTSTRAP_SERVERS)
 
@@ -178,13 +145,23 @@ def _consume():
 threading.Thread(target=_consume, daemon=True, name="kafka-consumer").start()
 
 
-# ---------------------------------------------------------------------------
-# REST
-# ---------------------------------------------------------------------------
-
 @app.get("/health")
 def health():
     return jsonify({"status": "ok", "service": "notification-service"})
+
+
+@app.post("/internal/notifications")
+def create_notification():
+    body = request.get_json(force=True)
+    user_id = body.get("userId")
+    notif_type = body.get("type")
+    message = body.get("message")
+    if not user_id or not notif_type or not message:
+        return jsonify({"error": "userId, type, and message are required"}), 400
+
+    payload = body.get("payload", {})
+    _store(user_id, notif_type, message, payload)
+    return jsonify({"stored": True}), 201
 
 
 @app.get("/notifications/<user_id>")

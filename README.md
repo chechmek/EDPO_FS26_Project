@@ -111,6 +111,10 @@ In c8run Docker mode, Operate is typically available at:
 
 Open each BPMN file from `bpmn files/` in Camunda Modeler and deploy it to your local Zeebe cluster.
 
+Important: redeploy the BPMN files after pulling the latest repo changes. The Kafka connector tasks in
+`RegisterUser.bpmn` and `ReportContent.bpmn` now target `localhost:9092`, which is required when Camunda 8 Run is
+running on your host machine and Kafka is exposed from Docker on port `9092`.
+
 #### What to configure in Modeler
 
 - Target environment: local/self-managed
@@ -158,6 +162,7 @@ curl http://localhost:8001/health
 curl http://localhost:8002/health
 curl http://localhost:8003/health
 curl http://localhost:8004/health
+curl http://localhost:8005/health
 ```
 
 ## Localhost Interfaces and Ports
@@ -193,10 +198,10 @@ curl http://localhost:8004/health
   - body: `{ "username": "alice", "password": "secret" }`
 - Verify content process:
   - `POST http://localhost:8002/verifications`
-  - body: `{ "userId": "<user-id>", "contentUrl": "https://example.com", "contentTitle": "Example" }`
+  - body: `{ "userId": "<user-id>", "contentUrl": "https://example.com", "contentTitle": "Example", "peerMode": "manual" }`
 - Report content process:
   - `POST http://localhost:8003/reports`
-  - body: `{ "reporterId": "<user-id>", "contentId": "content-123", "reason": "spam" }`
+  - body: `{ "reporterId": "<user-id>", "postId": "post-123", "postOwnerId": "<owner-id>", "reason": "spam", "objectionMode": "manual" }`
 
 ### Interact with running instances (message correlation paths)
 
@@ -220,15 +225,20 @@ curl -X POST http://localhost:8001/users \
   -H "Content-Type: application/json" \
   -d '{"username":"alice","password":"secret"}'
 
-# 2) Start VerifyContent process
+# 2) Start VerifyContent process (replace userId with the approved userId)
 curl -X POST http://localhost:8002/verifications \
   -H "Content-Type: application/json" \
-  -d '{"userId":"11111111-1111-4111-8111-111111111111","contentUrl":"https://example.com","contentTitle":"Example"}'
+  -d '{"userId":"11111111-1111-4111-8111-111111111111","contentUrl":"https://example.com","contentTitle":"Example","peerMode":"manual"}'
 
 # 3) Simulate peer verdict (replace verificationId)
 curl -X POST http://localhost:8002/verifications/<verificationId>/peer-response \
   -H "Content-Type: application/json" \
   -d '{"peerId":"peer-1","approved":true}'
+
+# 4) Start ReportContent process
+curl -X POST http://localhost:8003/reports \
+  -H "Content-Type: application/json" \
+  -d '{"reporterId":"11111111-1111-4111-8111-111111111111","postId":"post-123","postOwnerId":"22222222-2222-4222-8222-222222222222","reason":"spam","objectionMode":"manual"}'
 ```
 
 Watch the process in Operate while executing these calls.
@@ -266,5 +276,4 @@ If needed:
 - If BPMN start fails with "process not found":
   - redeploy BPMN from Modeler
   - confirm process IDs are unchanged
-
 

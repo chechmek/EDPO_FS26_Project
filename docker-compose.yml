@@ -23,8 +23,14 @@ services:
     environment:
       ZEEBE_ADDRESS: host.docker.internal:26500
       USER_SERVICE_URL: http://user-service:8001
+      NOTIFICATION_SERVICE_URL: http://notification-service:8005
+      ATTESTATION_SERVICE_URL: http://attestation-service:8004
     depends_on:
       user-service:
+        condition: service_started
+      notification-service:
+        condition: service_started
+      attestation-service:
         condition: service_started
     networks: [infra]
     restart: unless-stopped
@@ -36,6 +42,10 @@ services:
       - "8003:8003"
     environment:
       ZEEBE_ADDRESS: host.docker.internal:26500
+      NOTIFICATION_SERVICE_URL: http://notification-service:8005
+    depends_on:
+      notification-service:
+        condition: service_started
     networks: [infra]
     restart: unless-stopped
 
@@ -59,4 +69,3 @@ services:
       KAFKA_GROUP_ID: notification-service
     networks: [infra]
     restart: unless-stopped
-
