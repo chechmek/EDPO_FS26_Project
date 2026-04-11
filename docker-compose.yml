@@ -44,8 +44,11 @@ services:
     environment:
       ZEEBE_ADDRESS: host.docker.internal:26500
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      ATTESTATION_SERVICE_URL: http://attestation-service:8004
     depends_on:
       notification-service:
+        condition: service_started
+      attestation-service:
         condition: service_started
     networks: [infra]
     restart: unless-stopped

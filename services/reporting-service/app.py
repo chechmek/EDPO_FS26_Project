@@ -16,6 +16,7 @@ from typing import Any
 from confluent_kafka import Producer
 from flask import Flask, jsonify, request
 from pyzeebe import ZeebeClient, ZeebeWorker, create_insecure_channel
+import requests as http
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(name)s] %(levelname)s %(message)s")
 log = logging.getLogger("reporting-service")
@@ -24,6 +25,7 @@ app = Flask(__name__)
 
 ZEEBE_ADDRESS = os.getenv("ZEEBE_ADDRESS", "zeebe:26500")
 KAFKA_BOOTSTRAP_SERVERS = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "kafka:29092")
+ATTESTATION_SERVICE_URL = os.getenv("ATTESTATION_SERVICE_URL", "http://attestation-service:8004")
 REPORT_CONTENT_PROCESS_ID = "Process_0rsygf3"
 
 _reports: dict[str, dict[str, Any]] = {}
@@ -101,6 +103,28 @@ def _send_notification(user_id: str, notif_type: str, message: str, payload: dic
     )
 
 
+def _invalidate_signature_for_post(post_id: str, signature_id: str | None, report_id: str) -> dict[str, Any]:
+    payload: dict[str, Any] = {
+        "invalidatedBy": "reporting-service",
+        "reason": f"Post {post_id} deleted by report {report_id}",
+    }
+    if signature_id:
+        payload["signatureId"] = signature_id
+    else:
+        payload["contentUrl"] = post_id
+
+    try:
+        resp = http.post(f"{ATTESTATION_SERVICE_URL}/attestations/invalidate", json=payload, timeout=5)
+        if resp.status_code == 404:
+            return {"attempted": True, "invalidated": 0, "attestationFound": False}
+        resp.raise_for_status()
+        body = resp.json()
+        return {"attempted": True, "invalidated": body.get("invalidated", 0), "attestationFound": True}
+    except Exception as exc:
+        log.warning("[delete-post] failed to invalidate signature for postId=%s: %s", post_id, exc)
+        return {"attempted": False, "invalidated": 0, "attestationFound": False}
+
+
 @app.get("/health")
 def health():
     return jsonify({"status": "ok", "service": "reporting-service"})
@@ -115,6 +139,7 @@ def submit_report():
         "reporterId": "...",
         "postId": "...",
         "postOwnerId": "...",
+        "signatureId": "...",
         "reason": "...",
         "objectionMode": "manual|auto-object|auto-silent",
         "objectionDelaySeconds": 5
@@ -124,6 +149,7 @@ def submit_report():
     reporter_id = body.get("reporterId")
     post_id = body.get("postId")
     post_owner_id = body.get("postOwnerId")
+    signature_id = body.get("signatureId")
     if not reporter_id or not post_id or not post_owner_id:
         return jsonify({"error": "reporterId, postId, and postOwnerId required"}), 400
 
@@ -155,6 +181,7 @@ def submit_report():
             "reporterId": reporter_id,
             "postId": post_id,
             "postOwnerId": post_owner_id,
+            "signatureId": signature_id,
             "reason": body.get("reason", ""),
             "status": "pending-review",
             "processInstanceKey": key,
@@ -166,6 +193,7 @@ def submit_report():
             {
                 "postId": post_id,
                 "postOwnerId": post_owner_id,
+                "signatureId": signature_id,
                 "deleted": False,
                 "lastReportId": report_id,
             },
@@ -293,23 +321,64 @@ async def _run_workers():
         Deletes the reported post in the in-memory post store.
         """
         log.info("[delete-post] postId=%s reportId=%s", postId, reportId)
+        signature_id: str | None = None
         with _lock:
             post_record = _posts.setdefault(postId, {"postId": postId, "deleted": False})
             post_record["deleted"] = True
             post_record["lastReportId"] = reportId
+            signature_id = post_record.get("signatureId")
             if reportId in _reports:
                 _reports[reportId]["status"] = "deleted"
-        return {"deleted": True}
+                signature_id = signature_id or _reports[reportId].get("signatureId")
+
+        invalidation = _invalidate_signature_for_post(postId, signature_id, reportId)
+        event_payload = {
+            "reportId": reportId,
+            "postId": postId,
+            "postOwnerId": kwargs.get("postOwnerId"),
+            "signatureId": signature_id,
+            "signatureInvalidated": invalidation.get("invalidated", 0) > 0,
+            "signatureInvalidatedCount": invalidation.get("invalidated", 0),
+        }
+        _publish_event("post-deleted", postId, event_payload)
+        log.info(
+            "[delete-post] published post-deleted reportId=%s postId=%s invalidated=%s",
+            reportId,
+            postId,
+            invalidation.get("invalidated", 0),
+        )
+        return {
+            "deleted": True,
+            "signatureInvalidated": invalidation.get("invalidated", 0) > 0,
+            "signatureInvalidatedCount": invalidation.get("invalidated", 0),
+            "postDeletedEventPublished": True,
+        }
+
+    @worker.task(task_type="objection-approved")
+    async def handle_objection_approved(reportId: str, postId: str, postOwnerId: str, **kwargs) -> dict:
+        payload = {"reportId": reportId, "postId": postId, "postOwnerId": postOwnerId}
+        _publish_event("objection-approved", reportId, payload)
+        log.info("[objection-approved] reportId=%s postId=%s", reportId, postId)
+        return {}
 
     @worker.task(task_type="publish-objection-approved")
-    async def handle_publish_objection_approved(reportId: str, postId: str, postOwnerId: str, **kwargs) -> dict:
+    async def handle_publish_objection_approved_legacy(reportId: str, postId: str, postOwnerId: str, **kwargs) -> dict:
         payload = {"reportId": reportId, "postId": postId, "postOwnerId": postOwnerId}
         _publish_event("objection-approved", reportId, payload)
         log.info("[publish-objection-approved] reportId=%s postId=%s", reportId, postId)
         return {}
 
     @worker.task(task_type="publish-post-deleted")
-    async def handle_publish_post_deleted(reportId: str, postId: str, postOwnerId: str, **kwargs) -> dict:
+    async def handle_publish_post_deleted(
+        reportId: str,
+        postId: str,
+        postOwnerId: str,
+        postDeletedEventPublished: bool = False,
+        **kwargs,
+    ) -> dict:
+        if postDeletedEventPublished:
+            log.info("[publish-post-deleted] skipped; already published by delete-post reportId=%s postId=%s", reportId, postId)
+            return {}
         payload = {"reportId": reportId, "postId": postId, "postOwnerId": postOwnerId}
         _publish_event("post-deleted", postId, payload)
         log.info("[publish-post-deleted] reportId=%s postId=%s", reportId, postId)

@@ -20,6 +20,10 @@ _attestations: dict[str, dict[str, Any]] = {}
 _lock = threading.Lock()
 
 
+def _serialize(record: dict[str, Any]) -> dict[str, Any]:
+    return dict(record)
+
+
 @app.get("/health")
 def health():
     return jsonify({"status": "ok", "service": "attestation-service"})
@@ -42,6 +46,9 @@ def create_attestation():
         "userId": user_id,
         "contentUrl": content_url,
         "signatureHash": signature_hash,
+        "isValid": True,
+        "invalidatedBy": None,
+        "invalidatedReason": None,
     }
 
     with _lock:
@@ -54,7 +61,7 @@ def create_attestation():
 @app.get("/attestations")
 def list_attestations():
     with _lock:
-        items = [dict(item) for item in _attestations.values()]
+        items = [_serialize(item) for item in _attestations.values()]
     return jsonify({"count": len(items), "attestations": items})
 
 
@@ -64,7 +71,41 @@ def get_attestation(signature_id):
         record = _attestations.get(signature_id)
     if record is None:
         return jsonify({"error": "not found"}), 404
-    return jsonify(record)
+    return jsonify(_serialize(record))
+
+
+@app.post("/attestations/invalidate")
+def invalidate_attestation():
+    body = request.get_json(force=True)
+    signature_id = body.get("signatureId")
+    content_url = body.get("contentUrl")
+    invalidated_by = body.get("invalidatedBy", "reporting-service")
+    reason = body.get("reason", "Post deleted by moderation")
+    if not signature_id and not content_url:
+        return jsonify({"error": "signatureId or contentUrl is required"}), 400
+
+    updated: list[dict[str, Any]] = []
+    with _lock:
+        for record in _attestations.values():
+            if signature_id and record.get("signatureId") != signature_id:
+                continue
+            if content_url and record.get("contentUrl") != content_url:
+                continue
+            record["isValid"] = False
+            record["invalidatedBy"] = invalidated_by
+            record["invalidatedReason"] = reason
+            updated.append(_serialize(record))
+
+    if not updated:
+        return jsonify({"invalidated": 0, "attestations": []}), 404
+
+    log.info(
+        "[invalidate-attestation] signatureId=%s contentUrl=%s count=%s",
+        signature_id,
+        content_url,
+        len(updated),
+    )
+    return jsonify({"invalidated": len(updated), "attestations": updated}), 200
 
 
 if __name__ == "__main__":
