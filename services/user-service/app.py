@@ -9,6 +9,7 @@ Zeebe job types owned by this service:
 
 REST endpoints:
   POST /users
+  GET  /users
   GET  /users/<id>
   GET  /health
 """
@@ -94,6 +95,16 @@ def _upsert_user(user_id: str, **fields: Any) -> dict[str, Any]:
 @app.get("/health")
 def health():
     return jsonify({"status": "ok", "service": "user-service"})
+
+
+@app.get("/users")
+def list_users():
+    """
+    Returns all in-memory users.
+    """
+    with _lock:
+        users = [dict(user) for user in _users.values()]
+    return jsonify({"count": len(users), "users": users})
 
 
 @app.post("/users")

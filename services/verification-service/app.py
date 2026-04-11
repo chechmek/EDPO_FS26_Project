@@ -7,12 +7,14 @@ Receives peer verdicts and correlates them back to waiting process instances.
 
 import asyncio
 import hashlib
+import json
 import logging
 import os
 import threading
 import uuid
 from typing import Any
 
+from confluent_kafka import Producer
 import requests as http
 from flask import Flask, jsonify, request
 from pyzeebe import ZeebeClient, ZeebeWorker, create_insecure_channel
@@ -24,8 +26,8 @@ app = Flask(__name__)
 
 ZEEBE_ADDRESS = os.getenv("ZEEBE_ADDRESS", "zeebe:26500")
 USER_SERVICE_URL = os.getenv("USER_SERVICE_URL", "http://user-service:8001")
-NOTIFICATION_SERVICE_URL = os.getenv("NOTIFICATION_SERVICE_URL", "http://notification-service:8005")
 ATTESTATION_SERVICE_URL = os.getenv("ATTESTATION_SERVICE_URL", "http://attestation-service:8004")
+KAFKA_BOOTSTRAP_SERVERS = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "kafka:29092")
 VERIFY_CONTENT_PROCESS_ID = "Process_01gn4xr"
 
 _verifications: dict[str, dict[str, Any]] = {}
@@ -33,6 +35,8 @@ _lock = threading.Lock()
 
 _loop: asyncio.AbstractEventLoop | None = None
 _loop_ready = threading.Event()
+_producer: Producer | None = None
+_producer_lock = threading.Lock()
 
 _FINAL_STATUSES = {
     "rejected-unregistered",
@@ -76,8 +80,19 @@ def _coerce_float(value: Any, default: float, *, minimum: float = 0.0) -> float:
     return max(minimum, number)
 
 
-def _notification_enabled() -> bool:
-    return bool(NOTIFICATION_SERVICE_URL)
+def _get_producer() -> Producer:
+    global _producer
+    with _producer_lock:
+        if _producer is None:
+            _producer = Producer(
+                {
+                    "bootstrap.servers": KAFKA_BOOTSTRAP_SERVERS,
+                    "client.id": "verification-service",
+                    "acks": "all",
+                    "enable.idempotence": True,
+                }
+            )
+    return _producer
 
 
 def _get_verification(verification_id: str) -> dict[str, Any] | None:
@@ -95,23 +110,10 @@ def _update_verification(verification_id: str, **fields: Any) -> dict[str, Any] 
         return dict(record)
 
 
-def _send_notification(user_id: str, notif_type: str, message: str, payload: dict[str, Any]) -> None:
-    if not _notification_enabled():
-        return
-    try:
-        resp = http.post(
-            f"{NOTIFICATION_SERVICE_URL}/internal/notifications",
-            json={
-                "userId": user_id,
-                "type": notif_type,
-                "message": message,
-                "payload": payload,
-            },
-            timeout=5,
-        )
-        resp.raise_for_status()
-    except Exception as exc:
-        log.warning("[notification] failed to notify userId=%s: %s", user_id, exc)
+def _publish_event(topic: str, key: str, payload: dict[str, Any]) -> None:
+    producer = _get_producer()
+    producer.produce(topic=topic, key=key.encode("utf-8"), value=json.dumps(payload))
+    producer.flush(5.0)
 
 
 async def _publish_camunda_message_async(name: str, correlation_key: str, variables: dict[str, Any]) -> None:
@@ -516,16 +518,17 @@ async def _run_workers():
 
         _update_verification(verificationId, status=status)
 
-        _send_notification(
-            userId,
-            notif_type,
-            message,
-            {
+        notification_payload = {
+            "userId": userId,
+            "type": notif_type,
+            "message": message,
+            "payload": {
                 "verificationId": verificationId,
                 "status": status,
                 "signatureId": signatureId or record.get("signatureId"),
             },
-        )
+        }
+        _publish_event("verification-notification", verificationId, notification_payload)
 
         log.info("[send-verification-notification] userId=%s verificationId=%s status=%s", userId, verificationId, status)
         return {"notificationSent": True, "verificationStatus": status}

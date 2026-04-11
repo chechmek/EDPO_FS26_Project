@@ -24,8 +24,8 @@ services:
     environment:
       ZEEBE_ADDRESS: host.docker.internal:26500
       USER_SERVICE_URL: http://user-service:8001
-      NOTIFICATION_SERVICE_URL: http://notification-service:8005
       ATTESTATION_SERVICE_URL: http://attestation-service:8004
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
     depends_on:
       user-service:
         condition: service_started
@@ -43,7 +43,6 @@ services:
       - "8003:8003"
     environment:
       ZEEBE_ADDRESS: host.docker.internal:26500
-      NOTIFICATION_SERVICE_URL: http://notification-service:8005
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
     depends_on:
       notification-service:
@@ -64,8 +63,6 @@ services:
   notification-service:
     build: ./services/notification-service
     container_name: cv-notification-service
-    ports:
-      - "8005:8005"
     environment:
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       KAFKA_GROUP_ID: notification-service

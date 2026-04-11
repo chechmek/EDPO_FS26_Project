@@ -51,6 +51,13 @@ def create_attestation():
     return jsonify(record), 201
 
 
+@app.get("/attestations")
+def list_attestations():
+    with _lock:
+        items = [dict(item) for item in _attestations.values()]
+    return jsonify({"count": len(items), "attestations": items})
+
+
 @app.get("/attestations/<signature_id>")
 def get_attestation(signature_id):
     with _lock:

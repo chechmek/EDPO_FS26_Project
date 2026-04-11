@@ -14,7 +14,6 @@ import uuid
 from typing import Any
 
 from confluent_kafka import Producer
-import requests as http
 from flask import Flask, jsonify, request
 from pyzeebe import ZeebeClient, ZeebeWorker, create_insecure_channel
 
@@ -24,7 +23,6 @@ log = logging.getLogger("reporting-service")
 app = Flask(__name__)
 
 ZEEBE_ADDRESS = os.getenv("ZEEBE_ADDRESS", "zeebe:26500")
-NOTIFICATION_SERVICE_URL = os.getenv("NOTIFICATION_SERVICE_URL", "http://notification-service:8005")
 KAFKA_BOOTSTRAP_SERVERS = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "kafka:29092")
 REPORT_CONTENT_PROCESS_ID = "Process_0rsygf3"
 
@@ -91,20 +89,16 @@ def _update_report(report_id: str, **fields: Any) -> dict[str, Any] | None:
 
 
 def _send_notification(user_id: str, notif_type: str, message: str, payload: dict[str, Any]) -> None:
-    try:
-        resp = http.post(
-            f"{NOTIFICATION_SERVICE_URL}/internal/notifications",
-            json={
-                "userId": user_id,
-                "type": notif_type,
-                "message": message,
-                "payload": payload,
-            },
-            timeout=5,
-        )
-        resp.raise_for_status()
-    except Exception as exc:
-        log.warning("[notification] failed to notify userId=%s: %s", user_id, exc)
+    _publish_event(
+        "report-notification",
+        payload.get("reportId", user_id),
+        {
+            "userId": user_id,
+            "type": notif_type,
+            "message": message,
+            "payload": payload,
+        },
+    )
 
 
 @app.get("/health")
