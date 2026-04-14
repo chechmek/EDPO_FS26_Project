@@ -8,8 +8,8 @@
 
 ## Further Information
 
-- GitHub Repository: [chechmek/EDPO\_FS26\_Project](https://github.com/chechmek/EDPO_FS26_Project)
-- Commit History: [github.com/chechmek/EDPO\_FS26\_Project/commits/main](https://github.com/chechmek/EDPO_FS26_Project/commits/main)
+- GitHub Repository: [chechmek/EDPOFS26Project](https://github.com/chechmek/EDPO_FS26_Project)
+- Commit History: [github.com/chechmek/EDPOFS26Project/commits/main](https://github.com/chechmek/EDPO_FS26_Project/commits/main)
 
 ## Responsibilities
 
