@@ -8,7 +8,7 @@
 
 ## Repository
 
-- GitHub repository: <https://github.com/chechmek/EDPO_FS26_Project>
+- GitHub repository: [https://github.com/chechmek/EDPO_FS26_Project](https://github.com/chechmek/EDPO_FS26_Project)
 
 ## Scope of This README
 
@@ -34,6 +34,7 @@ Python services expose REST APIs and run Zeebe workers to execute BPMN service t
 - `verification-service` (port `8002`)
 - `reporting-service` (port `8003`)
 - `attestation-service` (port `8004`, not orchestrated by Camunda)
+- `notification-service` (no HTTP port — Kafka-only consumer, logs notifications to stdout)
 
 Additional infra in this repo:
 
@@ -54,7 +55,18 @@ Additional infra in this repo:
   - `VerifyContent.bpmn`
   - `ReportContent.bpmn`
   - `verify-user.form`
-- `services/`: Python microservices (Flask/FastAPI)
+  - `check-report-valid.form`
+  - `review-objection.form`
+- `db/`: PostgreSQL initialization scripts (schema per service)
+- `docs/`: Project documentation
+  - `adr/`: Architecture Decision Records
+  - `exercises-submissions/`: Exercise submission documents
+  - `exercises-tasksheets/`: Exercise task sheet PDFs
+  - `lecture-slides/`: Lecture slide PDFs
+- `misc/`: Miscellaneous files (e.g. Postman collection)
+- `scripts/`: Helper scripts (`demo.sh`, `generate_load.py`)
+- `services/`: Python microservices
+- `shared/`: Shared Python library used across services
 - `docker-compose.infra.yml`: Kafka + Kafka UI
 - `docker-compose.yml`: application services
 
@@ -86,9 +98,9 @@ If you prefer Docker mode in c8run:
 
 In standard (non-Docker) c8run mode:
 
-- Operate: <http://localhost:8080/operate>
-- Tasklist: <http://localhost:8080/tasklist>
-- Camunda API base: <http://localhost:8080>
+- Operate: [http://localhost:8080/operate](http://localhost:8080/operate)
+- Tasklist: [http://localhost:8080/tasklist](http://localhost:8080/tasklist)
+- Camunda API base: [http://localhost:8080](http://localhost:8080)
 - Zeebe gRPC gateway: `localhost:26500`
 
 Useful quick check:
@@ -105,7 +117,7 @@ curl -u demo:demo http://localhost:8080/v2/topology
 
 In c8run Docker mode, Operate is typically available at:
 
-- <http://localhost:8088/operate>
+- [http://localhost:8088/operate](http://localhost:8088/operate)
 
 ### 3) Deploy BPMN models from Camunda Modeler
 
@@ -123,7 +135,10 @@ running on your host machine and Kafka is exposed from Docker on port `9092`.
   - `bpmn files/RegisterUser.bpmn`
   - `bpmn files/VerifyContent.bpmn`
   - `bpmn files/ReportContent.bpmn`
-- Also deploy form `bpmn files/verify-user.form` (form id `verify-user`)
+- Also deploy these forms:
+  - `bpmn files/verify-user.form` (form id `verify-user`)
+  - `bpmn files/check-report-valid.form` (form id `check-report-valid`)
+  - `bpmn files/review-objection.form` (form id `review-objection`)
 
 Important: keep the process IDs unchanged because services start processes by these IDs:
 
@@ -162,7 +177,12 @@ curl http://localhost:8001/health
 curl http://localhost:8002/health
 curl http://localhost:8003/health
 curl http://localhost:8004/health
-curl http://localhost:8005/health
+```
+
+The `notification-service` has no HTTP interface and can be monitored via its Docker logs:
+
+```bash
+docker logs cv-notification-service -f
 ```
 
 ## Localhost Interfaces and Ports
@@ -178,16 +198,17 @@ curl http://localhost:8005/health
 
 ### Camunda web interfaces
 
-- Operate: <http://localhost:8080/operate>
-- Tasklist: <http://localhost:8080/tasklist>
+- Operate: [http://localhost:8080/operate](http://localhost:8080/operate)
+- Tasklist: [http://localhost:8080/tasklist](http://localhost:8080/tasklist)
 
 ### Project service interfaces
 
-- `user-service`: <http://localhost:8001>
-- `verification-service`: <http://localhost:8002>
-- `reporting-service`: <http://localhost:8003>
-- `attestation-service`: <http://localhost:8004>
-- Kafka UI: <http://localhost:8079>
+- `user-service`: [http://localhost:8001](http://localhost:8001)
+- `verification-service`: [http://localhost:8002](http://localhost:8002)
+- `reporting-service`: [http://localhost:8003](http://localhost:8003)
+- `attestation-service`: [http://localhost:8004](http://localhost:8004)
+- `notification-service`: no HTTP interface (Kafka consumer only)
+- Kafka UI: [http://localhost:8079](http://localhost:8079)
 
 ## Process Interaction APIs (Start and Drive Instances)
 
