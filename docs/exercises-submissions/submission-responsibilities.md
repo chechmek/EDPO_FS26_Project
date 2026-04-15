@@ -1,4 +1,4 @@
-# Submission - Responsibilities
+# Appendix B - Team Responsibilities
 
 - Course: Event-driven and Process-oriented Architectures (EDPO), FS2026, University of St.Gallen
 - Group 4

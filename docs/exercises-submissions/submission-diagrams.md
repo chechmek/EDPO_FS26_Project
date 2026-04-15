@@ -1,4 +1,4 @@
-# Architecture Diagrams — EDPO Group 4 Content Verification Platform
+# Appendix C - Architecture Diagrams
 
 - Course: Event-driven and Process-oriented Architectures (EDPO), FS2026, University of St.Gallen
 - Group 4
@@ -70,6 +70,7 @@ flowchart LR
 The platform has four bounded contexts. This diagram shows their boundaries and the type of relationship between them, using standard DDD notation.
 
 ```mermaid
+%%{init: {'themeVariables': { 'fontSize': '12px' }}}%%
 flowchart TB
     subgraph UserIdentity["User Identity Context\n(user-service)"]
         direction TB
@@ -96,6 +97,7 @@ flowchart TB
     end
 
     subgraph Notification["Notification Context\n(notification-service)"]
+        direction TB
         NK["Kafka consumer\n6 topics"]
     end
 

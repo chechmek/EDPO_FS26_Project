@@ -1,4 +1,4 @@
-# Submission - Exercise 5
+# Appendix A - Exercise 5
 
 - Course: Event-driven and Process-oriented Architectures (EDPO), FS2026, University of St.Gallen
 - Group 4

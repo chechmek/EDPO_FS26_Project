@@ -17,7 +17,7 @@
 
 ### 1.1 Project Purpose and Value Proposition
 
-The project is a peer-based content verification platform implemented as a set of Python 3.12 Flask microservices. Its core purpose is to address a trust problem that many digital platforms face: content should not become authoritative merely because it was published, but neither should trust decisions be delegated blindly to opaque automated scoring. Our project therefore proposes a middle ground between fully manual moderation and fully automated platform logic. Trustworthiness is established through an explicit, auditable process in which a registered user submits content, peers review it, the platform performs additional internal checks, and a cryptographic attestation is created only if the full process reaches a positive outcome.
+The project is a peer-based content verification platform implemented as a set of Python microservices. Its core purpose is to address a trust problem that many digital platforms face: content should not become authoritative merely because it was published, but neither should trust decisions be delegated blindly to opaque automated scoring. Our project therefore proposes a middle ground between fully manual moderation and fully automated platform logic. Trustworthiness is established through an explicit, auditable process in which a registered user submits content, peers review it, the platform performs additional internal checks, and a cryptographic attestation is created only if the full process reaches a positive outcome.
 
 This makes the project more than a CRUD-style prototype. It is intentionally designed as a workflow-centric system in which trust, moderation, and accountability are first-class concerns. A content verification is not just a database update; it is a long-running decision process with waiting states, deadlines, external inputs, and legally or reputationally significant outcomes. The same is true for reporting and content removal. By modelling these flows explicitly, the platform can explain why a user was accepted, why content was verified, why a post was deleted, or why an objection was rejected. That proposition reflects the broader motivation of the course: using event-driven and process-oriented architecture not only to connect services, but to make distributed business behaviour explicit, observable, and governable.
 
@@ -30,6 +30,7 @@ The system is organised into distinct bounded contexts rather than one monolithi
 The context map below shows how these domains relate to each other. `User Identity` is upstream of `Content Verification`, because verification depends on registration status. `Attestation` is a reusable capability consumed by both verification and governance. Kafka acts as a shared event bus for notification-style communication, and the `notification-service` behaves as a conformist consumer of the published event language.
 
 ```mermaid
+%%{init: {'themeVariables': { 'fontSize': '12px' }}}%%
 flowchart TB
     subgraph UserIdentity["User Identity Context\n(user-service)"]
         direction TB
@@ -56,6 +57,7 @@ flowchart TB
     end
 
     subgraph Notification["Notification Context\n(notification-service)"]
+        direction TB
         NK["Kafka consumer\n6 topics"]
     end
 
@@ -82,7 +84,7 @@ This decomposition is one of the key reasons the project remains understandable 
 
 ### 1.3 RegisterUser Process
 
-`RegisterUser.bpmn` (`Process_1kwkl0j`) manages user onboarding. A registration request is not automatically accepted, because the platform assumes that participation in later trust-related processes should itself be controlled. The flow therefore includes a human-reviewed background check in Camunda Tasklist before the user account is activated. Only after this decision does the service publish either a `user-registered` or a `user-rejected` event to Kafka. This makes onboarding part of the auditable lifecycle of the platform rather than a one-time setup step.
+`RegisterUser.bpmn` (`Process_1kwkl0j`) manages user onboarding (see Appendix D for the visual BPMN representation). A registration request is not automatically accepted, because the platform assumes that participation in later trust-related processes should itself be controlled. The flow therefore includes a human-reviewed background check in Camunda Tasklist before the user account is activated. Only after this decision does the service publish either a `user-registered` or a `user-rejected` event to Kafka. This makes onboarding part of the auditable lifecycle of the platform rather than a one-time setup step.
 
 The sequence below shows that registration is both an orchestration problem and a governance problem. The process begins synchronously through the REST API, becomes stateful inside Zeebe, involves a human task, and only then emits an event for downstream consumers.
 
@@ -127,7 +129,7 @@ From a technical perspective, the process already demonstrates the overall style
 
 ### 1.4 VerifyContent Process
 
-`VerifyContent.bpmn` (`Process_01gn4xr`) governs the full content verification lifecycle and is the central value-creation process of the platform. After a registered user submits a content URL, the platform checks eligibility, dispatches peer review requests, waits for peer verdicts through message correlation, performs an internal verification step, and, if the outcome is positive, stores a cryptographic signature through the `attestation-service`. The proposition of the system is concentrated here: trust is not inferred silently in the background, but earned through a transparent, multi-step workflow that can later be inspected and explained.
+`VerifyContent.bpmn` (`Process_01gn4xr`) governs the full content verification lifecycle and is the central value-creation process of the platform (see Appendix D for the visual BPMN representation). After a registered user submits a content URL, the platform checks eligibility, dispatches peer review requests, waits for peer verdicts through message correlation, performs an internal verification step, and, if the outcome is positive, stores a cryptographic signature through the `attestation-service`. The proposition of the system is concentrated here: trust is not inferred silently in the background, but earned through a transparent, multi-step workflow that can later be inspected and explained.
 
 This is also the most technically expressive process in the project because it combines several EDPO concepts in one flow: synchronous REST to validate a dependency on the `user-service`, asynchronous waiting via an Event-Based Gateway, stateful retry when peer responses are delayed, internal worker-driven service tasks, a REST-based infrastructure call to the `attestation-service`, and Kafka publication of the final result.
 
@@ -185,7 +187,7 @@ Technically, the `verification-service` is the most orchestration-heavy service 
 
 ### 1.5 ReportContent Process
 
-`ReportContent.bpmn` (`Process_0rsygf3`) covers the moderation and governance dimension of the platform. A reporter can flag a post as problematic, but deletion is not executed as an immediate automated reaction. Instead, the process starts with moderator validation, informs the affected post owner, opens a formal objection window, and handles the outcome depending on whether an objection is filed and how it is reviewed. This process therefore gives the platform procedural fairness: it makes moderation not only effective, but explainable and contestable.
+`ReportContent.bpmn` (`Process_0rsygf3`) covers the moderation and governance dimension of the platform (see Appendix D for the visual BPMN representation). A reporter can flag a post as problematic, but deletion is not executed as an immediate automated reaction. Instead, the process starts with moderator validation, informs the affected post owner, opens a formal objection window, and handles the outcome depending on whether an objection is filed and how it is reviewed. This process therefore gives the platform procedural fairness: it makes moderation not only effective, but explainable and contestable.
 
 The flow is especially important from an architectural point of view because it combines human judgement, time-based waiting, asynchronous callbacks, and compensating action on related infrastructure state. If the post is ultimately deleted, the process also invalidates the attestation signature through the `attestation-service`, which ties governance back to the platform's trust model.
 
@@ -418,7 +420,7 @@ The Kafka UI at `localhost:8079` was used extensively throughout development to 
 
 ### 3.2 Camunda and Zeebe
 
-One of the more counterintuitive lessons from working with Zeebe was the behaviour of in-memory service state after a restart. The `_verifications` and `_reports` dictionaries in the application services are populated when a process is started via the REST API. If a service container restarts, those dictionaries are empty and any subsequent `GET` request for a running verification or report returns 404, even though the process instance is still alive in Zeebe. This is an accepted limitation at the current project scale and is documented in ADR-0003, but it was initially surprising and underscores the importance of treating Zeebe as the authoritative state store rather than application-tier memory.
+One of the more counterintuitive lessons from working with Zeebe was the behaviour of in-memory service state after a restart. The `_verifications` and `_reports` dictionaries in the application services are populated when a process is started via the REST API. If a service container restarts, those dictionaries are empty and any subsequent `GET` request for a running verification or report returns 404, even though the process instance is still alive in Zeebe. This is an accepted limitation at the current project scale and is documented in [ADR-0003](https://github.com/chechmek/EDPO_FS26_Project/blob/main/docs/adr/0003-record-stateful-resilience-error-handling.md), but it was initially surprising and underscores the importance of treating Zeebe as the authoritative state store rather than application-tier memory.
 
 Zeebe's job activation timeout provided an implicit crash recovery mechanism that we had not planned for explicitly. When a service container restarted mid-job, Zeebe simply waited for the activation timeout to elapse and then re-offered the job to the next available worker. No application code was needed to detect or recover from this situation.
 
@@ -440,7 +442,7 @@ If Zeebe itself is unavailable, no new process instances can start and no in-fli
 
 ## 4. Reflections and Lessons Learned
 
-The most significant architectural lesson from this project is that BPMN makes business logic explicit in a way that code alone does not. Every timeout, every retry boundary, every conditional branch, and every human decision point in the content verification and reporting flows is directly readable in the BPMN model — no need to trace through service code to understand what happens when a peer is slow to respond or when a moderator approves an objection. This transparency proved valuable not only for design but for debugging: when a process instance behaved unexpectedly, opening it in Camunda Operate and reading its variable history was almost always faster than adding logging statements.
+The most significant architectural lesson from this project is that BPMN makes business logic explicit in a way that code alone does not. Every timeout, every retry boundary, every conditional branch, and every human decision point in the content verification and reporting flows is directly readable in the BPMN model — no need to trace through service code to understand what happens when a peer is slow to respond or when a moderator approves an objection. This transparency proved valuable not only for design but for debugging: when a process instance behaved unexpectedly, opening it in Camunda Operate and reading its variable history felt rather easier than adding lots of logging statements and tracing it that way.
 
 The hybrid coordination approach — Zeebe for stateful orchestration, Kafka for notifications — held up well throughout the project. The right-tool-for-the-right-job principle avoided the two failure modes we had anticipated: a process monolith where even simple notifications were modelled as BPMN tasks, and a pure choreography system where the verification flow's conditional branching and compensation logic would have been scattered across event handlers in multiple services.
 
@@ -482,7 +484,12 @@ File: [submission-responsibilities.md](https://github.com/chechmek/EDPO_FS26_Pro
 Complete set of six conceptual diagrams: System Context, DDD Context Map, Service Architecture, and three end-to-end sequence diagrams (RegisterUser, VerifyContent, ReportContent).
 File: [submission-diagrams.md](https://github.com/chechmek/EDPO_FS26_Project/blob/main/docs/exercises-submissions/submission-diagrams.md)
 
-**Appendix D — Architecture Decision Records**
+**Appendix D — BPMN Models and Forms**
+The complete executable process models and their associated Camunda forms used in the project. These files document the workflow logic directly at the modelling level and complement the textual and diagrammatic explanations in the main submission.
+
+File: [submission-bpmn-files.md](https://github.com/chechmek/EDPO_FS26_Project/blob/main/docs/exercises-submissions/submission-bpmn-files.md)
+
+**Appendix E — Architecture Decision Records**
 Full text of all eight ADRs covering coordination pattern, workflow engine selection, stateful resilience, distributed data consistency, message broker selection, process model boundaries, asynchronous message correlation, and auditing.
 
 
