@@ -7,10 +7,6 @@
   - Marco Birchler
   - Roman Babukh
 
-## Changes in this version
-
-Based on the feedback received, the report was restructured to follow the topic order given in the exercise description. Additional diagrams were added to illustrate key results.
-
 ## Quick Access Links
 
 - Repository: [https://github.com/MrStarco/EDPO_FS26_E1_Kafka_Tests](https://github.com/MrStarco/EDPO_FS26_E1_Kafka_Tests)
