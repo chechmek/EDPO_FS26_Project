@@ -442,6 +442,8 @@ Further information provided in the repository [README.md](https://github.com/Mr
 
 The following documents are attached to this submission PDF as appendices. They are maintained as separate files in the repository and are included here without modification.
 
+**Appendix A — Submission files:**
+
 **Submission — Exercise 1: Kafka Getting Started V2**  
 Combined test results from all three team branches covering producer experiments (batch size and latency, acknowledgment configuration, partition scaling, and parallel load), consumer experiments (processing delay and offset misconfiguration), and broker fault-tolerance with leader election.
 
