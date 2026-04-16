@@ -374,7 +374,7 @@ REST when a task needs an immediate answer to advance; async messaging when the 
 
 ### 2.6 CQRS and Auditability
 
-The platform makes decisions that need to be explainable later: users get rejected, content gets certified, reports lead to deletion, late objections get ignored. Camunda Operate and Elasticsearch act as a CQRS-style read side ([ADR-0008](https://github.com/chechmek/EDPO_FS26_Project/blob/main/docs/adr/0008-record-auditing-and-read-models.md)): Zeebe emits the process event stream, Operate projects it into a queryable model, Tasklist handles human tasks. The cost is operational weight; the benefit is no bespoke audit DB and much stronger diagnostics than logs alone.
+The platform makes decisions that need to be explainable later: users get rejected, content gets certified, reports lead to deletion, late objections get ignored. Camunda Operate and Elasticsearch act as a CQRS-style read side: Zeebe emits the process event stream, Operate projects it into a queryable model, Tasklist handles human tasks. The cost is operational weight; the benefit is no bespoke audit DB and much stronger diagnostics than logs alone.
 
 ---
 
@@ -465,6 +465,4 @@ Full text of all eight ADRs covering coordination pattern, workflow engine selec
 | [ADR-0005](https://github.com/chechmek/EDPO_FS26_Project/blob/main/docs/adr/0005-record-message-broker-selection.md)           | Message Broker Selection: Apache Kafka for Choreography Events                | Picks Kafka for retained, replayable, multi-consumer notification streams                        | More extensibility and durability, but more operational complexity than a simple queue                |
 | [ADR-0006](https://github.com/chechmek/EDPO_FS26_Project/blob/main/docs/adr/0006-record-process-model-boundaries.md)           | Process Model Boundaries: One BPMN Model per Bounded Context                  | Prevents a process monolith by aligning one BPMN model with one bounded context                  | Better ownership and isolation, but cross-context queries require aggregation                         |
 | [ADR-0007](https://github.com/chechmek/EDPO_FS26_Project/blob/main/docs/adr/0007-record-asynchronous-message-correlation.md)   | Asynchronous Message Correlation via Zeebe                                    | Uses native Zeebe message correlation for peer verdicts and objections                           | No polling and no routing tables, but late messages may be discarded after TTL                        |
-| [ADR-0008](https://github.com/chechmek/EDPO_FS26_Project/blob/main/docs/adr/0008-record-auditing-and-read-models.md)           | Auditing and Read Models: Camunda Operate as a Separated CQRS Read Side       | Uses Operate and Elasticsearch as the audit-oriented read side                                   | Strong observability without custom code, but additional memory and infrastructure overhead           |
-
 
