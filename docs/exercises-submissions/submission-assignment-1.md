@@ -74,6 +74,8 @@ flowchart TB
     K1 & K2 & K3 -->|"Conformist\n(reads events)"| Notification
 ```
 
+
+
 ### 1.3 RegisterUser Process
 
 `RegisterUser.bpmn` (`Process_1kwkl0j`) manages user onboarding (see Appendix D for the visual BPMN representation). A registration request is not automatically accepted, because the platform assumes that participation in later trust-related processes should itself be controlled. The flow therefore includes a human-reviewed background check in Camunda Tasklist before the user account is activated. Only after this decision does the service publish either a `user-registered` or a `user-rejected` event to Kafka. This step is also checked in other processes.
@@ -114,6 +116,8 @@ sequenceDiagram
         Kafka->>NS: consume → log notification
     end
 ```
+
+
 
 From a technical perspective, this demonstrates the overall style of the platform. The `user-service` exposes the external API, starts the BPMN process, executes the service tasks through a Zeebe worker, and persists its domain-facing state in an in-memory store. The generated `userId` then becomes the stable identifier used by the verification flow.
 
@@ -315,6 +319,8 @@ flowchart LR
     K -->|"consume topics"| NS
 ```
 
+
+
 The BPMN models use service tasks with explicit worker types, user tasks with forms, event-based and exclusive gateways, timer events, and message catch events. [ADR-0002](https://github.com/chechmek/EDPO_FS26_Project/blob/main/docs/adr/0002-record-workflow-engine-selection.md) explains Camunda 8 over 7: our codebase is Python, and `pyzeebe` gave us a clean native integration.
 
 ### 2.3 Stateful Resilience and Human Intervention
@@ -370,6 +376,8 @@ flowchart TB
     T1 & T2 & T3 -->|"consume\n(consumer group: notification-service)"| NS
 ```
 
+
+
 REST when a task needs an immediate answer to advance; async messaging when the process can wait or a side effect shouldn't block completion.
 
 ### 2.6 CQRS and Auditability
@@ -416,7 +424,6 @@ In-memory state was fine at course scale but wouldn't fly in production. Each se
 
 At-least-once delivery requires every worker to be idempotent. For each handler we had to ask whether running it twice leaves the system consistent. In practice that meant cheap side-effect-free checks before mutations, and keeping `attestation-service` calls and Kafka produces safe to repeat.
 
-
 ---
 
 ## 5. GitHub Release
@@ -435,8 +442,27 @@ Further information provided in the repository [README.md](https://github.com/Mr
 
 The following documents are attached to this submission PDF as appendices. They are maintained as separate files in the repository and are included here without modification.
 
-**Appendix A — Exercise 5 Report: Stateful Resilience Patterns**
-Detailed report on the implementation of Stateful Retry and Human Intervention in the BPMN processes, including process-level design rationale and lecture references.
+**Submission — Exercise 1: Kafka Getting Started V2**  
+Combined test results from all three team branches covering producer experiments (batch size and latency, acknowledgment configuration, partition scaling, and parallel load), consumer experiments (processing delay and offset misconfiguration), and broker fault-tolerance with leader election.
+
+*Changes in this version:* Based on the feedback received, the report was restructured to follow the topic order given in the exercise description. Additional diagrams were added to illustrate key results.
+
+File: [submission-exercise-1.md](https://github.com/chechmek/EDPO_FS26_Project/blob/main/docs/exercises-submissions/submission-exercise-1.md)
+
+**Submission — Exercise 2: Event Notification Pattern**  
+Report on the Event Notification EDA pattern implementation using a social media simulation. Covers the decoupled Kafka-based flow between three microservices (post-service, interaction-service, notification-service), the EDA design rationale, architecture, and verification instructions.  
+File: [submission-exercise-2.md](https://github.com/chechmek/EDPO_FS26_Project/blob/main/docs/exercises-submissions/submission-exercise-2.md)
+
+**Submission — Exercise 3: BPMN Orchestration and Process Design**  
+Report on the pivot to a content verification platform and the design of three orchestrated BPMN processes (VerifyContent, RegisterUser, ReportContent) executed by Python/Flask microservices via Camunda Zeebe, including the standalone Attestation Service.  
+File: [submission-exercise-3.md](https://github.com/chechmek/EDPO_FS26_Project/blob/main/docs/exercises-submissions/submission-exercise-3.md)
+
+**Submission — Exercise 4: Orchestration vs. Choreography and ADR**  
+Report on the coordination pattern decision (hybrid orchestration with Zeebe and choreography via Kafka) and the ADR justifying Camunda 8 over Camunda 7 for Python-based microservices.  
+File: [submission-exercise-4.md](https://github.com/chechmek/EDPO_FS26_Project/blob/main/docs/exercises-submissions/submission-exercise-4.md)
+
+**Submission — Exercise 5: Stateful Resilience Patterns**  
+Detailed report on the implementation of Stateful Retry and Human Intervention in the BPMN processes, including process-level design rationale and lecture references.  
 File: [submission-exercise-5.md](https://github.com/chechmek/EDPO_FS26_Project/blob/main/docs/exercises-submissions/submission-exercise-5.md)
 
 **Appendix B — Team Responsibilities**
@@ -465,4 +491,5 @@ Full text of all eight ADRs covering coordination pattern, workflow engine selec
 | [ADR-0005](https://github.com/chechmek/EDPO_FS26_Project/blob/main/docs/adr/0005-record-message-broker-selection.md)           | Message Broker Selection: Apache Kafka for Choreography Events                | Picks Kafka for retained, replayable, multi-consumer notification streams                        | More extensibility and durability, but more operational complexity than a simple queue                |
 | [ADR-0006](https://github.com/chechmek/EDPO_FS26_Project/blob/main/docs/adr/0006-record-process-model-boundaries.md)           | Process Model Boundaries: One BPMN Model per Bounded Context                  | Prevents a process monolith by aligning one BPMN model with one bounded context                  | Better ownership and isolation, but cross-context queries require aggregation                         |
 | [ADR-0007](https://github.com/chechmek/EDPO_FS26_Project/blob/main/docs/adr/0007-record-asynchronous-message-correlation.md)   | Asynchronous Message Correlation via Zeebe                                    | Uses native Zeebe message correlation for peer verdicts and objections                           | No polling and no routing tables, but late messages may be discarded after TTL                        |
+
 
