@@ -1,4 +1,4 @@
-# Submission - E1 Kafka - Combined Test Results
+# Submission - E1 Kafka - Combined Test Results V2
 
 - Course: Event-driven and Process-oriented Architectures (EDPO), FS2026, University of St.Gallen
 - Assignment: Exercise 1 - Kafka Getting Started
