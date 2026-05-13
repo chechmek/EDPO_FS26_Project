@@ -71,3 +71,22 @@ services:
       KAFKA_GROUP_ID: notification-service
     networks: [infra]
     restart: unless-stopped
+
+  sla-monitor:
+    build: ./processors/sla-monitor
+    container_name: cv-sla-monitor
+    ports:
+      - "8005:8005"
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      KAFKA_GROUP_ID: sla-monitor
+      PORT: 8005
+      SLA_SECONDS: 259200
+      WINDOW_GRACE_SECONDS: 10
+      WINDOW_RETENTION_MINUTES: 180
+      SCAN_INTERVAL_SECONDS: 1
+    depends_on:
+      notification-service:
+        condition: service_started
+    networks: [infra]
+    restart: unless-stopped
