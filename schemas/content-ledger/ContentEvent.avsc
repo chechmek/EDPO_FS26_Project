@@ -1,0 +1,27 @@
+{
+  "type": "record",
+  "namespace": "com.edpo.contentledger",
+  "name": "ContentEvent",
+  "doc": "Normalized cross-stream content event emitted by the ContentLedger topology after mapValues. Documentation-only: runtime serialization is JSON.",
+  "fields": [
+    { "name": "eventId", "type": ["null", "string"], "default": null,
+      "doc": "Dedupe key for at-least-once delivery." },
+    { "name": "contentId", "type": "string",
+      "doc": "Primary join/aggregate key — equal to contentUrl (verification side) or postId (reporting side)." },
+    { "name": "eventType", "type": {
+        "type": "enum",
+        "name": "ContentEventType",
+        "symbols": ["VERIFICATION", "REPORT", "DELETION", "OBJECTION_APPROVED"]
+    } },
+    { "name": "status", "type": ["null", "string"], "default": null,
+      "doc": "Domain-specific status (e.g. 'verified', 'rejected-peer', 'report-accepted', 'deleted')." },
+    { "name": "actor", "type": ["null", "string"], "default": null,
+      "doc": "userId / peerId / reporterId / postOwnerId depending on event type." },
+    { "name": "eventTime", "type": "string",
+      "doc": "ISO-8601 timestamp of the business event (used by the TimestampExtractor)." },
+    { "name": "sourceTopic", "type": "string" },
+    { "name": "correlationId", "type": ["null", "string"], "default": null,
+      "doc": "verificationId / reportId — useful for cross-stream joins in P1/P7." },
+    { "name": "details", "type": ["null", { "type": "map", "values": "string" }], "default": null }
+  ]
+}

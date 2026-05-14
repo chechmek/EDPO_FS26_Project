@@ -1,0 +1,122 @@
+:root {
+  --bg: #0f172a;
+  --panel: #1e293b;
+  --panel-2: #273449;
+  --text: #e2e8f0;
+  --muted: #94a3b8;
+  --accent: #38bdf8;
+  --good: #22c55e;
+  --warn: #facc15;
+  --bad: #ef4444;
+  --border: #334155;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+}
+header {
+  padding: 14px 24px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+header h1 { margin: 0; font-size: 18px; font-weight: 600; }
+.muted { color: var(--muted); }
+.small { font-size: 12px; }
+main {
+  display: grid;
+  grid-template-columns: 360px 1fr;
+  height: calc(100vh - 92px);
+}
+section { padding: 16px 20px; overflow-y: auto; }
+#left { border-right: 1px solid var(--border); background: var(--panel); }
+#right { background: var(--panel-2); }
+.row { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+h2 { margin: 0; font-size: 14px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+h3 { margin: 18px 0 8px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+button {
+  background: var(--panel-2); color: var(--text); border: 1px solid var(--border);
+  border-radius: 6px; padding: 4px 10px; cursor: pointer; font-size: 12px;
+}
+button:hover { border-color: var(--accent); color: var(--accent); }
+input[type="search"] {
+  width: 100%;
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  padding: 8px 10px;
+  border-radius: 6px;
+  margin-bottom: 10px;
+}
+.auto { font-size: 12px; color: var(--muted); }
+.list { display: flex; flex-direction: column; gap: 4px; }
+.list .item {
+  padding: 8px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  border: 1px solid transparent;
+  background: var(--panel-2);
+  display: flex; justify-content: space-between; align-items: center;
+  gap: 8px;
+}
+.list .item:hover { border-color: var(--border); }
+.list .item.active { border-color: var(--accent); background: rgba(56,189,248,0.08); }
+.list .item .id { font-family: ui-monospace, SFMono-Regular, monospace; font-size: 12px; }
+.empty { color: var(--muted); font-style: italic; padding: 14px 0; }
+.kv { display: grid; grid-template-columns: 180px 1fr; gap: 6px 14px; align-items: center; }
+.kv dt { color: var(--muted); font-size: 12px; }
+.kv dd { margin: 0; font-family: ui-monospace, SFMono-Regular, monospace; font-size: 13px; word-break: break-all; }
+.badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.badge.NEW         { background: #1f2937; color: var(--muted); }
+.badge.VERIFIED    { background: rgba(34,197,94,0.18); color: var(--good); }
+.badge.REJECTED    { background: rgba(239,68,68,0.18); color: var(--bad); }
+.badge.REPORTED_OPEN { background: rgba(250,204,21,0.18); color: var(--warn); }
+.badge.REPORT_DISMISSED { background: #1f2937; color: var(--muted); }
+.badge.DELETED     { background: rgba(239,68,68,0.25); color: var(--bad); }
+.badge.RESTORED    { background: rgba(56,189,248,0.18); color: var(--accent); }
+.pill {
+  font-size: 11px;
+  padding: 2px 10px;
+  border-radius: 9999px;
+  border: 1px solid var(--border);
+  color: var(--muted);
+}
+.pill.ok { color: var(--good); border-color: var(--good); }
+.pill.bad { color: var(--bad); border-color: var(--bad); }
+table.trace {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+table.trace th, table.trace td {
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  padding: 6px 8px;
+  vertical-align: top;
+}
+table.trace th {
+  color: var(--muted);
+  font-weight: 500;
+  text-transform: uppercase;
+  font-size: 11px;
+}
+table.trace td.mono { font-family: ui-monospace, SFMono-Regular, monospace; }
+footer {
+  padding: 8px 24px;
+  border-top: 1px solid var(--border);
+  background: var(--panel);
+}
+code { background: var(--panel-2); padding: 1px 6px; border-radius: 4px; }

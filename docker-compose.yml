@@ -72,6 +72,7 @@ services:
     networks: [infra]
     restart: unless-stopped
 
+  # Verification Activity Monitor & SLA Tracker (Python, Faust-like processor)
   sla-monitor:
     build: ./processors/sla-monitor
     container_name: cv-sla-monitor
@@ -88,5 +89,19 @@ services:
     depends_on:
       notification-service:
         condition: service_started
+    networks: [infra]
+    restart: unless-stopped
+
+  # Content Decision Ledger (Java, Kafka Streams KTable + Interactive Queries)
+  # NOTE: requires the infra compose to be up first (kafka on cv-infra network).
+  content-ledger:
+    build: ./processors/content-ledger
+    container_name: cv-content-ledger
+    ports:
+      - "8085:8085"
+    environment:
+      SERVER_PORT: 8085
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      KAFKA_APPLICATION_ID: content-ledger-v1
     networks: [infra]
     restart: unless-stopped
