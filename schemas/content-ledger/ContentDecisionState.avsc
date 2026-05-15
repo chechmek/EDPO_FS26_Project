@@ -1,0 +1,40 @@
+{
+  "type": "record",
+  "namespace": "com.edpo.contentledger",
+  "name": "ContentDecisionState",
+  "doc": "Aggregated state per contentId — materialized in KTable 'content-state-store' and published to log-compacted topic 'content-decision-ledger'. Documentation-only: runtime serialization is JSON.",
+  "fields": [
+    { "name": "contentId", "type": "string" },
+    { "name": "lifecycleStatus", "type": {
+        "type": "enum",
+        "name": "LifecycleStatus",
+        "symbols": ["NEW", "VERIFIED", "REJECTED", "REPORTED_OPEN", "REPORT_DISMISSED", "DELETED", "RESTORED"]
+    } },
+    { "name": "lastVerificationStatus", "type": ["null", "string"], "default": null },
+    { "name": "lastReportStatus", "type": ["null", "string"], "default": null },
+    { "name": "deleted", "type": "boolean", "default": false },
+    { "name": "restored", "type": "boolean", "default": false },
+    { "name": "firstSeenAt", "type": ["null", "string"], "default": null,
+      "doc": "ISO-8601 timestamp of the first event observed for this contentId." },
+    { "name": "lastUpdatedAt", "type": ["null", "string"], "default": null },
+    { "name": "decisionCount", "type": "long", "default": 0 },
+    { "name": "decisionTrace", "type": {
+        "type": "array",
+        "items": {
+          "type": "record",
+          "name": "Decision",
+          "fields": [
+            { "name": "eventId", "type": ["null", "string"], "default": null },
+            { "name": "eventType", "type": "com.edpo.contentledger.ContentEventType" },
+            { "name": "status", "type": ["null", "string"], "default": null },
+            { "name": "actor", "type": ["null", "string"], "default": null },
+            { "name": "eventTime", "type": "string" },
+            { "name": "ingestionTime", "type": "string" },
+            { "name": "sourceTopic", "type": "string" },
+            { "name": "correlationId", "type": ["null", "string"], "default": null },
+            { "name": "details", "type": ["null", { "type": "map", "values": "string" }], "default": null }
+          ]
+        }
+    }, "default": [] }
+  ]
+}
