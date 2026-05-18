@@ -1,0 +1,44 @@
+server:
+  port: ${SERVER_PORT:8085}
+
+spring:
+  application:
+    name: content-ledger
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    streams:
+      application-id: ${KAFKA_APPLICATION_ID:content-ledger-v1}
+      properties:
+        # Stable processing under load while staying simple for the course project.
+        default.key.serde: org.apache.kafka.common.serialization.Serdes$StringSerde
+        default.value.serde: org.apache.kafka.common.serialization.Serdes$StringSerde
+        commit.interval.ms: 1000
+        cache.max.bytes.buffering: 0
+        processing.guarantee: at_least_once
+        # Use payload eventTime; fall back to record timestamp / wall clock if absent.
+        default.timestamp.extractor: com.edpo.contentledger.stream.PayloadEventTimeExtractor
+
+contentledger:
+  topics:
+    verification-notification: verification-notification
+    report-notification: report-notification
+    post-deleted: post-deleted
+    objection-approved: objection-approved
+    output: content-decision-ledger
+  store:
+    content-state: content-state-store
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus,kafkastreamstopology
+  endpoint:
+    health:
+      show-details: always
+
+logging:
+  level:
+    root: INFO
+    com.edpo.contentledger: INFO
+    org.apache.kafka.streams: INFO

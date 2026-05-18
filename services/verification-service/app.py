@@ -6,6 +6,7 @@ Receives peer verdicts and correlates them back to waiting process instances.
 """
 
 import asyncio
+from datetime import datetime, timezone
 import hashlib
 import json
 import logging
@@ -46,6 +47,14 @@ _FINAL_STATUSES = {
     "verified",
 }
 _PEER_MODES = {"manual", "auto-approve", "auto-reject", "auto-mixed"}
+
+
+def _utc_now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _content_id_for_url(content_url: str) -> str:
+    return f"content-{hashlib.sha256(content_url.encode('utf-8')).hexdigest()[:16]}"
 
 
 def _zeebe_call(coro):
@@ -326,6 +335,7 @@ def start_verification():
             "verificationId": verification_id,
             "userId": user_id,
             "contentUrl": content_url,
+            "contentId": _content_id_for_url(content_url),
             "contentTitle": body.get("contentTitle", ""),
             "status": "pending",
             "processInstanceKey": key,
@@ -519,12 +529,16 @@ async def _run_workers():
         _update_verification(verificationId, status=status)
 
         notification_payload = {
+            "eventTime": _utc_now_iso(),
             "userId": userId,
+            "contentId": record.get("contentId"),
+            "status": status,
             "type": notif_type,
             "message": message,
             "payload": {
                 "verificationId": verificationId,
                 "status": status,
+                "contentId": record.get("contentId"),
                 "signatureId": signatureId or record.get("signatureId"),
             },
         }

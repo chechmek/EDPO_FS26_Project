@@ -1,0 +1,112 @@
+{
+  "info": {
+    "name": "P2 – Content Decision Ledger",
+    "description": "Drives the four input topics through the existing services and queries the ledger.\n\nIMPORTANT — contentId convention enforced by the `verification-activity-monitor` branch:\n• verification-service:  contentId = 'content-<sha256(contentUrl)[:16]>'\n• reporting-service:     contentId = postId\n\nTo make verification + reporting events correlate on the SAME ledger key, the flow below first reads the derived contentId from the verification record, then uses it as the postId when filing the report.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "content_ledger",       "value": "http://localhost:8085" },
+    { "key": "verification_service", "value": "http://localhost:8002" },
+    { "key": "reporting_service",    "value": "http://localhost:8003" },
+    { "key": "user_service",         "value": "http://localhost:8001" },
+    { "key": "user_id",        "value": "" },
+    { "key": "verification_id","value": "" },
+    { "key": "content_id",     "value": "" },
+    { "key": "content_url",    "value": "https://example.com/post-demo-1" },
+    { "key": "report_id",      "value": "" }
+  ],
+  "item": [
+    {
+      "name": "Ledger – Health & Stream State",
+      "item": [
+        { "name": "Actuator health",
+          "request": { "method": "GET", "url": "{{content_ledger}}/actuator/health" } },
+        { "name": "Streams runtime state",
+          "request": { "method": "GET", "url": "{{content_ledger}}/api/health/stream" } }
+      ]
+    },
+    {
+      "name": "Ledger – Interactive Queries",
+      "item": [
+        { "name": "List all tracked content",
+          "request": { "method": "GET", "url": "{{content_ledger}}/api/content?limit=100&withState=true" } },
+        { "name": "Get state by contentId",
+          "request": { "method": "GET", "url": "{{content_ledger}}/api/content/{{content_id}}/state" } },
+        { "name": "Get full decision trace",
+          "request": { "method": "GET", "url": "{{content_ledger}}/api/content/{{content_id}}/decision-trace" } }
+      ]
+    },
+    {
+      "name": "End-to-End Flow – run in order",
+      "item": [
+        {
+          "name": "1. Register a user",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "var j = pm.response.json();",
+            "if (j.processInstanceKey) pm.collectionVariables.set('user_id', j.processInstanceKey);"
+          ]}}],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{user_service}}/users",
+            "body": { "mode": "raw", "raw": "{\n  \"username\": \"alice\",\n  \"password\": \"secret\"\n}" }
+          }
+        },
+        {
+          "name": "2. Submit verification (verification-service derives contentId from contentUrl)",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "var j = pm.response.json();",
+            "if (j.verificationId) pm.collectionVariables.set('verification_id', j.verificationId);"
+          ]}}],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{verification_service}}/verifications",
+            "body": { "mode": "raw", "raw": "{\n  \"userId\": \"{{user_id}}\",\n  \"contentUrl\": \"{{content_url}}\",\n  \"contentTitle\": \"Demo article\",\n  \"peerMode\": \"auto-approve\"\n}" }
+          }
+        },
+        {
+          "name": "3. Read back the derived contentId (sha256-hashed)",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "var j = pm.response.json();",
+            "if (j.contentId) pm.collectionVariables.set('content_id', j.contentId);",
+            "console.log('content_id =', j.contentId);"
+          ]}}],
+          "request": {
+            "method": "GET",
+            "url": "{{verification_service}}/verifications/{{verification_id}}"
+          }
+        },
+        {
+          "name": "4. File a report using postId == contentId (so it correlates in the ledger)",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "var j = pm.response.json();",
+            "if (j.reportId) pm.collectionVariables.set('report_id', j.reportId);"
+          ]}}],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{reporting_service}}/reports",
+            "body": { "mode": "raw", "raw": "{\n  \"reporterId\": \"{{user_id}}\",\n  \"postId\": \"{{content_id}}\",\n  \"postOwnerId\": \"{{user_id}}\",\n  \"reason\": \"spam\",\n  \"objectionMode\": \"manual\"\n}" }
+          }
+        },
+        {
+          "name": "5. Optional – submit an objection (triggers objection-approved if approved)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{reporting_service}}/reports/{{report_id}}/objection",
+            "body": { "mode": "raw", "raw": "{\n  \"explanation\": \"Content is factually correct.\"\n}" }
+          }
+        },
+        {
+          "name": "6. Query the ledger – decision trace for {{content_id}}",
+          "request": {
+            "method": "GET",
+            "url": "{{content_ledger}}/api/content/{{content_id}}/decision-trace"
+          }
+        }
+      ]
+    }
+  ]
+}

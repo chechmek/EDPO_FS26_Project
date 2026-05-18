@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Content Decision Ledger</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <header>
+    <h1>Content Decision Ledger</h1>
+    <span class="pill" id="streamPill">stream: …</span>
+    <span class="muted">Kafka Streams KTable · Interactive Queries</span>
+  </header>
+
+  <main>
+    <section id="left">
+      <div class="row">
+        <h2>Tracked content</h2>
+        <button id="refresh">↻ Refresh</button>
+        <label class="auto">
+          <input type="checkbox" id="autoRefresh" checked /> auto (3s)
+        </label>
+      </div>
+      <input id="filter" type="search" placeholder="Filter by contentId…" />
+      <div id="list" class="list"></div>
+      <p class="muted small" id="count">no data yet</p>
+    </section>
+
+    <section id="right">
+      <div class="row">
+        <h2 id="detailTitle">Select a content item</h2>
+        <a id="permalink" class="muted small" target="_blank" rel="noopener"></a>
+      </div>
+
+      <div id="state" class="empty">No selection.</div>
+
+      <h3>Decision trace</h3>
+      <div id="trace" class="empty">—</div>
+    </section>
+  </main>
+
+  <footer>
+    <span class="muted small">
+      Endpoints:
+      <code>GET /api/content</code> ·
+      <code>GET /api/content/{id}/state</code> ·
+      <code>GET /api/content/{id}/decision-trace</code> ·
+      <code>GET /actuator/health</code>
+    </span>
+  </footer>
+
+  <script src="/app.js"></script>
+</body>
+</html>

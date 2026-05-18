@@ -6,6 +6,7 @@ Post owners can submit objections which are correlated back to the waiting insta
 """
 
 import asyncio
+from datetime import datetime, timezone
 import json
 import logging
 import os
@@ -38,6 +39,10 @@ _producer: Producer | None = None
 _producer_lock = threading.Lock()
 
 _OBJECTION_MODES = {"manual", "auto-object", "auto-silent"}
+
+
+def _utc_now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
 
 
 def _zeebe_call(coro):
@@ -91,11 +96,15 @@ def _update_report(report_id: str, **fields: Any) -> dict[str, Any] | None:
 
 
 def _send_notification(user_id: str, notif_type: str, message: str, payload: dict[str, Any]) -> None:
+    content_id = payload.get("contentId") or payload.get("postId")
     _publish_event(
         "report-notification",
         payload.get("reportId", user_id),
         {
+            "eventTime": _utc_now_iso(),
             "userId": user_id,
+            "contentId": content_id,
+            "status": notif_type,
             "type": notif_type,
             "message": message,
             "payload": payload,
@@ -180,6 +189,7 @@ def submit_report():
             "reportId": report_id,
             "reporterId": reporter_id,
             "postId": post_id,
+            "contentId": post_id,
             "postOwnerId": post_owner_id,
             "signatureId": signature_id,
             "reason": body.get("reason", ""),
@@ -293,13 +303,13 @@ async def _run_workers():
                 postOwnerId,
                 "report-valid",
                 "A moderator marked a report against your post as valid. You can object within 15 seconds.",
-                {"reportId": reportId, "postId": postId},
+                {"reportId": reportId, "postId": postId, "contentId": postId},
             )
             _send_notification(
                 reporterId,
                 "report-accepted",
                 "Your report was accepted and the post owner has been notified.",
-                {"reportId": reportId, "postId": postId},
+                {"reportId": reportId, "postId": postId, "contentId": postId},
             )
 
             if record["objectionMode"] == "auto-object":
@@ -310,7 +320,7 @@ async def _run_workers():
                 reporterId,
                 "report-dismissed",
                 "Your report was dismissed by moderation.",
-                {"reportId": reportId, "postId": postId},
+                {"reportId": reportId, "postId": postId, "contentId": postId},
             )
 
         return {"notificationSent": True}
@@ -333,8 +343,11 @@ async def _run_workers():
 
         invalidation = _invalidate_signature_for_post(postId, signature_id, reportId)
         event_payload = {
+            "eventTime": _utc_now_iso(),
             "reportId": reportId,
             "postId": postId,
+            "contentId": postId,
+            "status": "post-deleted",
             "postOwnerId": kwargs.get("postOwnerId"),
             "signatureId": signature_id,
             "signatureInvalidated": invalidation.get("invalidated", 0) > 0,
@@ -356,14 +369,28 @@ async def _run_workers():
 
     @worker.task(task_type="objection-approved")
     async def handle_objection_approved(reportId: str, postId: str, postOwnerId: str, **kwargs) -> dict:
-        payload = {"reportId": reportId, "postId": postId, "postOwnerId": postOwnerId}
+        payload = {
+            "eventTime": _utc_now_iso(),
+            "reportId": reportId,
+            "postId": postId,
+            "contentId": postId,
+            "status": "objection-approved",
+            "postOwnerId": postOwnerId,
+        }
         _publish_event("objection-approved", reportId, payload)
         log.info("[objection-approved] reportId=%s postId=%s", reportId, postId)
         return {}
 
     @worker.task(task_type="publish-objection-approved")
     async def handle_publish_objection_approved_legacy(reportId: str, postId: str, postOwnerId: str, **kwargs) -> dict:
-        payload = {"reportId": reportId, "postId": postId, "postOwnerId": postOwnerId}
+        payload = {
+            "eventTime": _utc_now_iso(),
+            "reportId": reportId,
+            "postId": postId,
+            "contentId": postId,
+            "status": "objection-approved",
+            "postOwnerId": postOwnerId,
+        }
         _publish_event("objection-approved", reportId, payload)
         log.info("[publish-objection-approved] reportId=%s postId=%s", reportId, postId)
         return {}
@@ -379,7 +406,14 @@ async def _run_workers():
         if postDeletedEventPublished:
             log.info("[publish-post-deleted] skipped; already published by delete-post reportId=%s postId=%s", reportId, postId)
             return {}
-        payload = {"reportId": reportId, "postId": postId, "postOwnerId": postOwnerId}
+        payload = {
+            "eventTime": _utc_now_iso(),
+            "reportId": reportId,
+            "postId": postId,
+            "contentId": postId,
+            "status": "post-deleted",
+            "postOwnerId": postOwnerId,
+        }
         _publish_event("post-deleted", postId, payload)
         log.info("[publish-post-deleted] reportId=%s postId=%s", reportId, postId)
         return {}

@@ -35,6 +35,7 @@ Python services expose REST APIs and run Zeebe workers to execute BPMN service t
 - `reporting-service` (port `8003`)
 - `attestation-service` (port `8004`, not orchestrated by Camunda)
 - `notification-service` (no HTTP port — Kafka-only consumer, logs notifications to stdout)
+- `sla-monitor` (port `8005`, Kafka-backed processor under `processors/sla-monitor`)
 
 Additional infra in this repo:
 
@@ -177,12 +178,33 @@ curl http://localhost:8001/health
 curl http://localhost:8002/health
 curl http://localhost:8003/health
 curl http://localhost:8004/health
+curl http://localhost:8005/health
 ```
 
 The `notification-service` has no HTTP interface and can be monitored via its Docker logs:
 
 ```bash
 docker logs cv-notification-service -f
+```
+
+The `sla-monitor` exposes stream-processed read endpoints:
+
+```bash
+curl http://localhost:8005/metrics/verification
+curl http://localhost:8005/sla/open-cases
+curl http://localhost:8005/sla/violations
+```
+
+Preview it with live verification traffic plus synthetic moderation SLA events:
+
+```bash
+.venv/bin/python scripts/preview_sla_monitor.py
+```
+
+Generate higher-volume Kafka-only load for the processor without Camunda user tasks:
+
+```bash
+.venv/bin/python scripts/load_sla_monitor.py --verification-events 500 --report-cases 200
 ```
 
 ## Localhost Interfaces and Ports
@@ -207,6 +229,7 @@ docker logs cv-notification-service -f
 - `verification-service`: [http://localhost:8002](http://localhost:8002)
 - `reporting-service`: [http://localhost:8003](http://localhost:8003)
 - `attestation-service`: [http://localhost:8004](http://localhost:8004)
+- `sla-monitor`: [http://localhost:8005](http://localhost:8005)
 - `notification-service`: no HTTP interface (Kafka consumer only)
 - Kafka UI: [http://localhost:8079](http://localhost:8079)
 
@@ -297,4 +320,3 @@ If needed:
 - If BPMN start fails with "process not found":
   - redeploy BPMN from Modeler
   - confirm process IDs are unchanged
-
