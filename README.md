@@ -36,6 +36,7 @@ Python services expose REST APIs and run Zeebe workers to execute BPMN service t
 - `attestation-service` (port `8004`, not orchestrated by Camunda)
 - `notification-service` (no HTTP port — Kafka-only consumer, logs notifications to stdout)
 - `sla-monitor` (port `8005`, Kafka-backed processor under `processors/sla-monitor`)
+- `ui` (port `8086`, standalone dashboard/proxy service)
 
 Additional infra in this repo:
 
@@ -179,6 +180,7 @@ curl http://localhost:8002/health
 curl http://localhost:8003/health
 curl http://localhost:8004/health
 curl http://localhost:8005/health
+curl http://localhost:8086/health
 ```
 
 The `notification-service` has no HTTP interface and can be monitored via its Docker logs:
@@ -230,6 +232,7 @@ Generate higher-volume Kafka-only load for the processor without Camunda user ta
 - `reporting-service`: [http://localhost:8003](http://localhost:8003)
 - `attestation-service`: [http://localhost:8004](http://localhost:8004)
 - `sla-monitor`: [http://localhost:8005](http://localhost:8005)
+- `ui`: [http://localhost:8086](http://localhost:8086)
 - `notification-service`: no HTTP interface (Kafka consumer only)
 - Kafka UI: [http://localhost:8079](http://localhost:8079)
 

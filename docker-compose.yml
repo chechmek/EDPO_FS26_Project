@@ -105,3 +105,21 @@ services:
       KAFKA_APPLICATION_ID: content-ledger-v1
     networks: [infra]
     restart: unless-stopped
+
+  ui:
+    build: ./ui
+    container_name: cv-ui
+    ports:
+      - "8086:8086"
+    environment:
+      PORT: 8086
+      CONTENT_LEDGER_BASE_URL: http://content-ledger:8085
+      SLA_MONITOR_BASE_URL: http://sla-monitor:8005
+      PROXY_TIMEOUT_SECONDS: 10
+    depends_on:
+      content-ledger:
+        condition: service_started
+      sla-monitor:
+        condition: service_started
+    networks: [infra]
+    restart: unless-stopped

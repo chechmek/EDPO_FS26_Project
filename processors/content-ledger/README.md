@@ -26,8 +26,8 @@ Four input topics — `verification-notification`, `report-notification`,
 into a `ContentDecisionState` KTable backed by RocksDB. The table is also
 written to the log-compacted topic `content-decision-ledger`. Two
 **Interactive Query** REST endpoints expose the materialized state for any
-content item without touching any database. A small web UI on `/` lets you
-browse the ledger interactively.
+content item without touching any database. The browser UI now lives in the
+standalone `ui/` service and proxies these endpoints.
 
 ## Lecture concepts realized (Week 8 + Week 9)
 
@@ -50,7 +50,6 @@ browse the ledger interactively.
 
 | Method | Path                                                          | Notes                                   |
 | ------ | ------------------------------------------------------------- | --------------------------------------- |
-| `GET`  | `/`                                                           | Web UI (static HTML/JS)                 |
 | `GET`  | `/api/content?limit=&withState=`                              | Lists tracked content items             |
 | `GET`  | `/api/content/{contentId}/state`                              | Current state summary (no trace)        |
 | `GET`  | `/api/content/{contentId}/decision-trace`                     | **Full** chronological decision history |
@@ -83,10 +82,11 @@ docker compose -f docker-compose.infra.yml up -d
 ```bash
 docker compose up -d --build user-service verification-service reporting-service \
                             attestation-service notification-service \
-                            content-ledger
+                            sla-monitor content-ledger ui
 ```
 
-- ledger UI: <http://localhost:8085>
+- ledger API: <http://localhost:8085>
+- standalone UI: <http://localhost:8086>
 
 ### 3. Send some traffic
 
