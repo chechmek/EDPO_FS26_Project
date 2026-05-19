@@ -62,20 +62,34 @@
         <h2 id="detailTitle">Select a content item</h2>
         <a id="permalink" class="muted small" target="_blank" rel="noopener"></a>
       </div>
+      <div class="tabs" role="tablist" aria-label="Dashboard detail tabs">
+        <button id="contentTabButton" class="tab-button active" type="button" data-tab="content">Content</button>
+        <button id="slaTabButton" class="tab-button" type="button" data-tab="sla">SLA monitor</button>
+      </div>
 
-      <h3>SLA case</h3>
-      <div id="slaCase" class="empty">No selected content.</div>
+      <div id="contentTab" class="tab-panel active" role="tabpanel">
+        <h3>SLA case</h3>
+        <p class="section-help"><em>Shows whether the selected content currently has an open or breached moderation SLA case.</em></p>
+        <div id="slaCase" class="empty">No selected content.</div>
 
-      <div id="state" class="empty">No selection.</div>
+        <h3>Decision</h3>
+        <p class="section-help"><em>Summarizes the latest lifecycle state derived from all events seen for the selected content.</em></p>
+        <div id="state" class="empty">No selection.</div>
 
-      <h3>Decision trace</h3>
-      <div id="trace" class="empty">—</div>
+        <h3>Decision trace</h3>
+        <p class="section-help"><em>Lists the event history for the selected content in chronological order.</em></p>
+        <div id="trace" class="empty">—</div>
+      </div>
 
-      <h3>Open SLA cases</h3>
-      <div id="slaOpenTable" class="empty">—</div>
+      <div id="slaTab" class="tab-panel" role="tabpanel" hidden>
+        <h3>SLA cases</h3>
+        <p class="section-help"><em>Lists currently open moderation cases that started with an accepted report and still wait for a final outcome.</em></p>
+        <div id="slaOpenTable" class="empty">—</div>
 
-      <h3>SLA violations</h3>
-      <div id="slaViolationTable" class="empty">—</div>
+        <h3>SLA violations</h3>
+        <p class="section-help"><em>Lists accepted report cases that stayed unresolved beyond the configured SLA deadline.</em></p>
+        <div id="slaViolationTable" class="empty">—</div>
+      </div>
     </section>
   </main>
 

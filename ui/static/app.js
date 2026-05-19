@@ -1,6 +1,7 @@
 const $ = (id) => document.getElementById(id);
 const state = {
   selected: null,
+  activeTab: "content",
   items: [],
   filter: "",
   latest1m: null,
@@ -63,7 +64,7 @@ async function refreshSlaData() {
     state.openCases = openCases.cases || [];
     state.violations = violations.violations || [];
     renderSlaOverview();
-    renderSlaTables();
+    renderSlaLists();
     renderSelectedSlaCase();
   } catch (e) {
     $("slaOpenCount").textContent = "err";
@@ -188,22 +189,20 @@ function renderMetricCard(metric, prefix) {
   $(`${prefix}TimedOut`).textContent = counts["timed-out"] ?? 0;
 }
 
-function renderSlaTables() {
-  renderSimpleTable(
+function renderSlaLists() {
+  renderSlaList(
     $("slaOpenTable"),
     state.openCases,
-    ["contentId", "status", "openedAt"],
     "No open SLA cases."
   );
-  renderSimpleTable(
+  renderSlaList(
     $("slaViolationTable"),
     state.violations,
-    ["contentId", "status", "openedAt"],
     "No SLA violations."
   );
 }
 
-function renderSimpleTable(target, items, columns, emptyText) {
+function renderSlaList(target, items, emptyText) {
   if (!items.length) {
     target.classList.add("empty");
     target.textContent = emptyText;
@@ -215,15 +214,25 @@ function renderSimpleTable(target, items, columns, emptyText) {
     .sort((a, b) => (b.openedAt || "").localeCompare(a.openedAt || ""))
     .slice(0, 10)
     .map((item) => {
-      const cells = columns.map((column) => {
-        const value = column.endsWith("At") ? fmtTs(item[column]) : escapeHtml(item[column] || "—");
-        return `<td class="${column === "contentId" ? "mono" : ""}">${value}</td>`;
-      }).join("");
-      return `<tr>${cells}</tr>`;
+      const badgeClass = badgeForSlaStatus(item.status);
+      return `
+        <button class="sla-list-item" type="button" data-content-id="${escapeHtml(item.contentId)}">
+          <span class="sla-list-main">
+            <span class="id mono">${escapeHtml(item.contentId)}</span>
+            <span class="badge ${badgeClass}">${escapeHtml(item.status || "open")}</span>
+          </span>
+          <span class="sla-list-meta">opened ${fmtTs(item.openedAt)}</span>
+        </button>
+      `;
     })
     .join("");
-  const header = columns.map((column) => `<th>${escapeHtml(column)}</th>`).join("");
-  target.innerHTML = `<table class="compact"><thead><tr>${header}</tr></thead><tbody>${rows}</tbody></table>`;
+  target.innerHTML = `<div class="sla-list">${rows}</div>`;
+  for (const button of target.querySelectorAll(".sla-list-item")) {
+    button.addEventListener("click", async () => {
+      setActiveTab("content");
+      await selectContent(button.dataset.contentId);
+    });
+  }
 }
 
 function renderSelectedSlaCase() {
@@ -257,6 +266,21 @@ function renderSelectedSlaCase() {
   `;
 }
 
+function setActiveTab(tab) {
+  state.activeTab = tab;
+  const contentButton = $("contentTabButton");
+  const slaButton = $("slaTabButton");
+  const contentPanel = $("contentTab");
+  const slaPanel = $("slaTab");
+  const contentActive = tab === "content";
+  contentButton.classList.toggle("active", contentActive);
+  slaButton.classList.toggle("active", !contentActive);
+  contentPanel.classList.toggle("active", contentActive);
+  slaPanel.classList.toggle("active", !contentActive);
+  contentPanel.hidden = !contentActive;
+  slaPanel.hidden = contentActive;
+}
+
 function badgeForType(t) {
   switch (t) {
     case "VERIFICATION": return "VERIFIED";
@@ -264,6 +288,15 @@ function badgeForType(t) {
     case "DELETION": return "DELETED";
     case "OBJECTION_APPROVED": return "RESTORED";
     default: return "NEW";
+  }
+}
+
+function badgeForSlaStatus(status) {
+  switch (status) {
+    case "open-breach":
+      return "DELETED";
+    default:
+      return "REPORTED_OPEN";
   }
 }
 
@@ -305,11 +338,14 @@ function stopAuto() { if (autoTimer) clearInterval(autoTimer); }
 $("autoRefresh").addEventListener("change", (e) => {
   if (e.target.checked) startAuto(); else stopAuto();
 });
+$("contentTabButton").addEventListener("click", () => setActiveTab("content"));
+$("slaTabButton").addEventListener("click", () => setActiveTab("sla"));
 
 refreshStreamHealth();
 refreshSlaHealth();
 refreshList();
 refreshSlaData();
+setActiveTab("content");
 startAuto();
 setInterval(refreshStreamHealth, 5000);
 setInterval(refreshSlaHealth, 5000);
