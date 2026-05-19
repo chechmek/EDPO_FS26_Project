@@ -68,6 +68,11 @@ def ledger_api_proxy(path: str):
     return _proxy_get(CONTENT_LEDGER_BASE_URL, f"/api/{path}")
 
 
+@app.get("/api/sla/<path:path>")
+def sla_api_proxy(path: str):
+    return _proxy_get(SLA_MONITOR_BASE_URL, f"/{path}")
+
+
 @app.get("/actuator/<path:path>")
 def ledger_actuator_proxy(path: str):
     return _proxy_get(CONTENT_LEDGER_BASE_URL, f"/actuator/{path}")

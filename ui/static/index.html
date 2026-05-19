@@ -8,10 +8,40 @@
 </head>
 <body>
   <header>
-    <h1>Content Decision Ledger</h1>
+    <h1>Platform Stream Dashboard</h1>
     <span class="pill" id="streamPill">stream: …</span>
-    <span class="muted">Kafka Streams KTable · Interactive Queries</span>
+    <span class="pill" id="slaPill">sla: …</span>
+    <span class="muted">content-ledger + sla-monitor</span>
   </header>
+
+  <section id="overview">
+    <div class="card">
+      <h2>Verification 1m</h2>
+      <div class="metrics-grid">
+        <div><span class="label">Total</span><strong id="m1Total">—</strong></div>
+        <div><span class="label">Verified</span><strong id="m1Verified">—</strong></div>
+        <div><span class="label">Rejected</span><strong id="m1Rejected">—</strong></div>
+        <div><span class="label">Timed out</span><strong id="m1TimedOut">—</strong></div>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Verification 5m</h2>
+      <div class="metrics-grid">
+        <div><span class="label">Total</span><strong id="m5Total">—</strong></div>
+        <div><span class="label">Verified</span><strong id="m5Verified">—</strong></div>
+        <div><span class="label">Rejected</span><strong id="m5Rejected">—</strong></div>
+        <div><span class="label">Timed out</span><strong id="m5TimedOut">—</strong></div>
+      </div>
+    </div>
+    <div class="card">
+      <h2>SLA</h2>
+      <div class="metrics-grid">
+        <div><span class="label">Open cases</span><strong id="slaOpenCount">—</strong></div>
+        <div><span class="label">Violations</span><strong id="slaViolationCount">—</strong></div>
+        <div><span class="label">Selected case</span><strong id="selectedSlaState">—</strong></div>
+      </div>
+    </div>
+  </section>
 
   <main>
     <section id="left">
@@ -33,10 +63,19 @@
         <a id="permalink" class="muted small" target="_blank" rel="noopener"></a>
       </div>
 
+      <h3>SLA case</h3>
+      <div id="slaCase" class="empty">No selected content.</div>
+
       <div id="state" class="empty">No selection.</div>
 
       <h3>Decision trace</h3>
       <div id="trace" class="empty">—</div>
+
+      <h3>Open SLA cases</h3>
+      <div id="slaOpenTable" class="empty">—</div>
+
+      <h3>SLA violations</h3>
+      <div id="slaViolationTable" class="empty">—</div>
     </section>
   </main>
 
@@ -46,6 +85,9 @@
       <code>GET /api/content</code> ·
       <code>GET /api/content/{id}/state</code> ·
       <code>GET /api/content/{id}/decision-trace</code> ·
+      <code>GET /api/sla/metrics/verification</code> ·
+      <code>GET /api/sla/sla/open-cases</code> ·
+      <code>GET /api/sla/sla/violations</code> ·
       <code>GET /actuator/health</code>
     </span>
   </footer>

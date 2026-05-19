@@ -209,6 +209,18 @@ Generate higher-volume Kafka-only load for the processor without Camunda user ta
 .venv/bin/python scripts/load_sla_monitor.py --verification-events 500 --report-cases 200
 ```
 
+Publish curated content stories that demonstrate both the ledger and SLA monitor:
+
+```bash
+.venv/bin/python scripts/publish_content_stories.py --step-delay-seconds 2 --story-gap-seconds 1
+```
+
+Reset Kafka history and restart the minimal stream-demo stack cleanly:
+
+```bash
+./scripts/clean_stream_demo.sh
+```
+
 ## Localhost Interfaces and Ports
 
 ### Camunda 8 Run (non-Docker mode)
