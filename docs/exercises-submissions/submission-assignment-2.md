@@ -226,23 +226,23 @@ flowchart TD
     PD[(post-deleted)]
     OA[(objection-approved)]
 
-    N1[mapValues -> ContentEvent]
-    N2[mapValues -> ContentEvent]
-    N3[mapValues -> ContentEvent]
-    N4[mapValues -> ContentEvent]
+    N1["mapValues -> ContentEvent"]
+    N2["mapValues -> ContentEvent"]
+    N3["mapValues -> ContentEvent"]
+    N4["mapValues -> ContentEvent"]
 
-    K1[selectKey(contentId)]
-    K2[selectKey(contentId)]
-    K3[selectKey(contentId)]
-    K4[selectKey(contentId)]
+    K1["selectKey by contentId"]
+    K2["selectKey by contentId"]
+    K3["selectKey by contentId"]
+    K4["selectKey by contentId"]
 
     M[merge 4 streams]
     G[groupByKey]
-    A[aggregate -> ContentDecisionState]
+    A["aggregate -> ContentDecisionState"]
 
     STORE[("content-state-store\nRocksDB + changelog")]
     LEDGER[(content-decision-ledger)]
-    IQ[[GET /api/content\nGET /api/content/{id}/state\nGET /api/content/{id}/decision-trace]]
+    IQ[[GET /api/content\nGET /api/content/by-id/state\nGET /api/content/by-id/decision-trace]]
 
     VN --> N1 --> K1 --> M
     RN --> N2 --> K2 --> M
