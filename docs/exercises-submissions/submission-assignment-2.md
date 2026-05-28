@@ -275,8 +275,6 @@ The aggregator is deliberately idempotent. Every event carries or derives an `ev
 | State store | `content-state-store` in RocksDB |
 | Interactive Queries | Spring REST layer reads the local Kafka Streams store |
 | Reprocessing pattern | compacted output topic can rebuild state |
-| Event-time hygiene | `PayloadEventTimeExtractor` reads payload timestamps |
-| Idempotency and dedupe | repeated `eventId`s are ignored |
 
 ---
 
@@ -318,64 +316,10 @@ We deliberately built read-side projections from Kafka rather than querying the 
 
 The Content Decision Ledger made the main Kafka Streams concepts tangible:
 
-- a `KTable` is not just a theory artifact; it is an effective way to expose current state from an event log,
 - local RocksDB state plus a changelog gives a strong operational model for recovery,
 - log compaction is a natural fit when the output semantics are "latest state per key".
 
-### 6.2 What We Learned from Windowing and Late Events
-
-The SLA Monitor showed that windowing is easy to describe conceptually but more subtle in implementation. The important issue was not only choosing tumbling versus hopping windows, but also deciding what to do with events that arrive late or in reverse order. This reinforced the lecture point that event-time semantics and grace handling are first-class design decisions, not implementation details.
-
-### 6.3 What We Learned from Combining the Two Processors
+### 6.2 What We Learned from Combining the Two Processors
 
 Using the same four topics for two separate processors demonstrated a core event-driven benefit: one event log can support multiple independent downstream views. One processor serves observability and alerting, while the other serves auditability and low-latency query access. No upstream BPMN process had to change.
 
----
-
-## 7. Release Reference and Implementation Links
-
-- Assignment 2 snapshot: [https://github.com/chechmek/EDPO_FS26_Project/tree/1b91ee9](https://github.com/chechmek/EDPO_FS26_Project/tree/1b91ee9)
-- Root project documentation: `[README.md](../README.md)`
-- SLA monitor flow description: `[docs/processing/sla-monitor-flow.md](../processing/sla-monitor-flow.md)`
-- Content ledger documentation: `[processors/content-ledger/README.md](../../processors/content-ledger/README.md)`
-- Proposal P1: `[docs/proposals/01-verification-activity-monitor.md](../proposals/01-verification-activity-monitor.md)`
-- Proposal P2: `[docs/proposals/02-content-decision-ledger.md](../proposals/02-content-decision-ledger.md)`
-- ADRs from Assignment 1: `[docs/adr/](../adr/)`
-
-Relevant implementation folders:
-
-- SLA monitor: `[processors/sla-monitor/](../../processors/sla-monitor/)`
-- Content ledger: `[processors/content-ledger/](../../processors/content-ledger/)`
-- Shared schemas: `[schemas/content-ledger/](../../schemas/content-ledger/)`
-- Load/demo scripts: `[scripts/](../../scripts/)`
-
----
-
-## 8. Assignment 1 Companion Artifacts
-
-The Exercise 8 hand-in also requires the final Assignment 1 material. The relevant companion artifacts in this repository are:
-
-- Final Assignment 1 report: `[submission-assignment-1.md](./submission-assignment-1.md)`
-- Assignment 1 PDF: `[submission-assignment-1-complete.pdf](./submission-assignment-1-complete.pdf)`
-- Assignment 1 slide deck: `[submission-assignment-1-slides.pdf](./submission-assignment-1-slides.pdf)`
-- Assignment 1 repository tag: [https://github.com/chechmek/EDPO_FS26_Project/tree/assignment-1](https://github.com/chechmek/EDPO_FS26_Project/tree/assignment-1)
-
-Compared to the earlier mid-semester state, the final project version adds the full stream-processing layer described in this report, integrates the standalone UI, hardens the content-ledger startup behavior, and extends the supporting scripts and documentation. Responsibilities remain split as described in the contribution section above and in `[submission-responsibilities.md](./submission-responsibilities.md)`.
-
-## 9. Reflections and Lessons Learned
-
-The main lesson from Assignment 2 is that stream processing is most valuable when it extends an already event-driven system instead of duplicating the command-side logic. In our case, the BPMN-driven platform already emitted the right domain events; Kafka Streams and a lightweight Python processor let us turn those events into useful read models with minimal disruption.
-
-We also learned that stateful processing quickly forces architectural discipline. Keys must be chosen carefully, timestamps must be trustworthy, duplicate handling must be explicit, and late arrivals require a policy. These aspects were easy to underestimate at the design level but became central during implementation.
-
-Finally, the assignment helped us connect the semester topics more clearly: BPMN orchestration manages long-running business processes, Kafka provides decoupled domain event exchange, and stream processing turns those event logs into live operational and analytical views. Together, these patterns form a coherent EDPO architecture rather than isolated course topics.
-
----
-
-## 10. References
-
-- Assignment 2 task sheet: `[EDPO_FS26_E8.pdf](../exercises-tasksheets/EDPO_FS26_E8.pdf)`
-- Assignment 2 presentation: `[EDPO-Final-Presentation-2.pdf](./EDPO-Final-Presentation-2.pdf)`
-- Assignment 1 submission: `[submission-assignment-1.md](./submission-assignment-1.md)`
-- Exercise 4 submission: `[submission-exercise-4.md](./submission-exercise-4.md)`
-- Exercise 5 submission: `[submission-exercise-5.md](./submission-exercise-5.md)`
