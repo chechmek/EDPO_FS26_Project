@@ -9,8 +9,8 @@
 ## Repository and Presentation
 
 - Project repository: [https://github.com/chechmek/EDPO_FS26_Project](https://github.com/chechmek/EDPO_FS26_Project)
-- Assignment 2 implementation snapshot: TODO
-- Assignment 2 presentation slides: TODO
+
+---
 
 ## 1. General Description of the Project
 
@@ -314,12 +314,35 @@ We deliberately built read-side projections from Kafka rather than querying the 
 
 ### 6.1 What We Learned from Kafka Streams
 
-The Content Decision Ledger made the main Kafka Streams concepts tangible:
-
-- local RocksDB state plus a changelog gives a strong operational model for recovery,
-- log compaction is a natural fit when the output semantics are "latest state per key".
+The Content Decision Ledger made the main Kafka Streams concepts tangible in our own implementation. Modeling the read side as a Materialized `KTable` backed by RocksDB and a changelog gave us a clear recovery model and allowed the REST endpoints to serve current content state directly. The log-compacted `content-decision-ledger` topic matched the "latest state per key" semantics well, while replaying events helped validate aggregation changes without changing upstream services. We also learned that practical stream processing needs careful handling of duplicates and event ordering: deduplication by event identifier keeps retries from changing the result, and sorting the decision trace by payload event time makes out-of-order arrivals easier to reason about. Interactive Queries worked well for low-latency local reads, but they also showed why key-based routing and awareness of instance-local state matter in distributed deployments.
 
 ### 6.2 What We Learned from Combining the Two Processors
 
 Using the same four topics for two separate processors demonstrated a core event-driven benefit: one event log can support multiple independent downstream views. One processor serves observability and alerting, while the other serves auditability and low-latency query access. No upstream BPMN process had to change.
+
+---
+
+## 7. GitHub Release
+
+Assignment-2 release: [https://github.com/chechmek/EDPO_FS26_Project/releases/tag/assignment-2](https://github.com/chechmek/EDPO_FS26_Project/releases/tag/assignment-2)
+
+Further information provided in the repository [README.md](https://github.com/chechmek/EDPO_FS26_Project/blob/main/README.md).
+
+---
+
+## Appendix
+
+The following documents are attached to this submission PDF as appendices. They are maintained as separate files in the repository and are included here without modification.
+
+**Appendix F — Team Responsibilities**
+Full exercise-by-exercise responsibility table with links to the repository and commit history.
+File: [submission-responsibilities-assignement-2.md](https://github.com/chechmek/EDPO_FS26_Project/blob/main/docs/exercises-submissions/submission-responsibilities-assignement-2.md)
+
+**Appendix — Assignment 1 Slides (not attached in submission pdf)**
+Final slide deck for Assignment 1.
+File: [submission-assignment-1-slides.pdf](https://github.com/chechmek/EDPO_FS26_Project/blob/main/docs/exercises-submissions/submission-assignment-1-slides.pdf)
+
+**Appendix — Assignment 2 Slides (not attached in submission pdf)**
+Final slide deck for Assignment 2.
+File: [submission-assignment-2-slides.pdf](https://github.com/chechmek/EDPO_FS26_Project/blob/main/docs/exercises-submissions/submission-assignment-2-slides.pdf)
 
