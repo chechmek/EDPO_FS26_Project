@@ -16,9 +16,8 @@ This README documents the current project setup for the Camunda-based content ve
 
 - complete local setup sequence
 - how to start and use Camunda 8 Run (`c8run`)
-- what to do in Camunda Modeler
-- Camunda interfaces and localhost ports
-- REST endpoints to start and interact with process instances
+- what to deploy in Camunda Modeler
+- where to find and use the stream processor applications (SPA)
 
 ## Project Overview
 
@@ -34,11 +33,18 @@ Python services expose REST APIs and run Zeebe workers to execute BPMN service t
 - `verification-service` (port `8002`)
 - `reporting-service` (port `8003`)
 - `attestation-service` (port `8004`, not orchestrated by Camunda)
-- `notification-service` (no HTTP port — Kafka-only consumer, logs notifications to stdout)
-- `sla-monitor` (port `8005`, Kafka-backed processor under `processors/sla-monitor`)
+- `notification-service` (no HTTP port, Kafka consumer)
+
+Stream processor applications (SPA):
+
+- `sla-monitor` (port `8005`, `processors/sla-monitor`)
+- `content-ledger` (port `8085`, `processors/content-ledger`)
+
+UI:
+
 - `ui` (port `8086`, standalone dashboard/proxy service)
 
-Additional infra in this repo:
+Additional infra:
 
 - Kafka (`9092`)
 - Kafka UI (`8079`)
@@ -60,19 +66,22 @@ Additional infra in this repo:
   - `check-report-valid.form`
   - `review-objection.form`
 - `db/`: PostgreSQL initialization scripts (schema per service)
-- `docs/`: Project documentation
+- `docs/`: project documentation
   - `adr/`: Architecture Decision Records
   - `exercises-submissions/`: Exercise submission documents
   - `exercises-tasksheets/`: Exercise task sheet PDFs
   - `lecture-slides/`: Lecture slide PDFs
 - `misc/`: Miscellaneous files (e.g. Postman collection)
-- `scripts/`: Helper scripts (`demo.sh`, `generate_load.py`)
+- `schemas/`: event and processor schemas (including `content-ledger` schemas)
+- `processors/`: stream processor applications (`sla-monitor`, `content-ledger`)
+- `scripts/`: helper scripts (`generate_load.py`, `load_sla_monitor.py`, `preview_sla_monitor.py`, `publish_content_stories.py`, `clean_stream_demo.sh`)
 - `services/`: Python microservices
 - `shared/`: Shared Python library used across services
+- `ui/`: standalone dashboard/proxy service
 - `docker-compose.infra.yml`: Kafka + Kafka UI
 - `docker-compose.yml`: application services
 
-## End-to-End Setup (Recommended Order)
+## End-to-End Setup
 
 ### 1) Start Camunda 8 Run (`c8run`)
 
@@ -98,55 +107,47 @@ If you prefer Docker mode in c8run:
 
 ### 2) Verify Camunda 8 Run is reachable
 
-In standard (non-Docker) c8run mode:
+```bash
+curl -u demo:demo http://localhost:8080/v2/topology
+```
 
 - Operate: [http://localhost:8080/operate](http://localhost:8080/operate)
 - Tasklist: [http://localhost:8080/tasklist](http://localhost:8080/tasklist)
 - Camunda API base: [http://localhost:8080](http://localhost:8080)
 - Zeebe gRPC gateway: `localhost:26500`
 
-Useful quick check:
+If API auth is disabled in your local setup:
 
 ```bash
 curl http://localhost:8080/v2/topology
 ```
 
-If API auth is enabled, use credentials (for example `demo:demo`):
+### 3) Deploy BPMN models and forms from Camunda Modeler
 
-```bash
-curl -u demo:demo http://localhost:8080/v2/topology
-```
+Deploy these BPMN files:
 
-In c8run Docker mode, Operate is typically available at:
+- `bpmn files/RegisterUser.bpmn`
+- `bpmn files/VerifyContent.bpmn`
+- `bpmn files/ReportContent.bpmn`
 
-- [http://localhost:8088/operate](http://localhost:8088/operate)
+Deploy these forms:
 
-### 3) Deploy BPMN models from Camunda Modeler
+- `bpmn files/verify-user.form`
+- `bpmn files/check-report-valid.form`
+- `bpmn files/review-objection.form`
 
-Open each BPMN file from `bpmn files/` in Camunda Modeler and deploy it to your local Zeebe cluster.
-
-Important: redeploy the BPMN files after pulling the latest repo changes. The Kafka connector tasks in
-`RegisterUser.bpmn` and `ReportContent.bpmn` now target `localhost:9092`, which is required when Camunda 8 Run is
-running on your host machine and Kafka is exposed from Docker on port `9092`.
-
-#### What to configure in Modeler
+What to configure in Modeler:
 
 - Target environment: local/self-managed
 - Zeebe endpoint: `localhost:26500`
-- Deploy these files:
-  - `bpmn files/RegisterUser.bpmn`
-  - `bpmn files/VerifyContent.bpmn`
-  - `bpmn files/ReportContent.bpmn`
-- Also deploy these forms:
-  - `bpmn files/verify-user.form` (form id `verify-user`)
-  - `bpmn files/check-report-valid.form` (form id `check-report-valid`)
-  - `bpmn files/review-objection.form` (form id `review-objection`)
 
-Important: keep the process IDs unchanged because services start processes by these IDs:
+Keep process IDs unchanged:
 
 - `Process_1kwkl0j` (RegisterUser)
 - `Process_01gn4xr` (VerifyContent)
 - `Process_0rsygf3` (ReportContent)
+
+Important: after pulling updates, redeploy BPMN files so Kafka connector settings in BPMN stay aligned with local Kafka (`localhost:9092`).
 
 ### 4) Start repo infrastructure (Kafka + Kafka UI)
 
@@ -156,8 +157,6 @@ From project root:
 docker compose -f docker-compose.infra.yml up -d
 ```
 
-This also creates the `cv-infra` network used by application services.
-
 ### 5) Start application services
 
 From project root:
@@ -166,11 +165,7 @@ From project root:
 docker compose up -d --build
 ```
 
-Services use:
-
-- `ZEEBE_ADDRESS=host.docker.internal:26500`
-
-So Camunda 8 Run must be running on your host before starting/using these services.
+Services use `ZEEBE_ADDRESS=host.docker.internal:26500`, so Camunda 8 Run must be running on the host.
 
 ### 6) Check service health
 
@@ -180,6 +175,7 @@ curl http://localhost:8002/health
 curl http://localhost:8003/health
 curl http://localhost:8004/health
 curl http://localhost:8005/health
+curl http://localhost:8085/api/health/stream
 curl http://localhost:8086/health
 ```
 
@@ -189,7 +185,14 @@ The `notification-service` has no HTTP interface and can be monitored via its Do
 docker logs cv-notification-service -f
 ```
 
-The `sla-monitor` exposes stream-processed read endpoints:
+## Stream Processor Applications
+
+The SPA can be found under:
+
+- `processors/sla-monitor`
+- `processors/content-ledger`
+
+### SLA Monitor quick usage
 
 ```bash
 curl http://localhost:8005/metrics/verification
@@ -221,34 +224,30 @@ Reset Kafka history and restart the minimal stream-demo stack cleanly:
 ./scripts/clean_stream_demo.sh
 ```
 
-## Localhost Interfaces and Ports
+### Content Ledger quick usage
 
-### Camunda 8 Run (non-Docker mode)
+```bash
+curl "http://localhost:8085/api/content?limit=20&withState=true"
+curl "http://localhost:8085/api/content/<contentId>/state"
+curl "http://localhost:8085/api/content/<contentId>/decision-trace"
+```
 
-- `8080` - Camunda core (Operate, Tasklist, Identity, APIs)
-- `26500` - Zeebe gRPC gateway
-- `8086` - Connectors API
-- `9200` - Elasticsearch
-- `9300` - Elasticsearch cluster comm
-- `9600` - Metrics
+Optional end-to-end demo:
 
-### Camunda web interfaces
+```bash
+./processors/content-ledger/scripts/demo.sh
+```
 
-- Operate: [http://localhost:8080/operate](http://localhost:8080/operate)
-- Tasklist: [http://localhost:8080/tasklist](http://localhost:8080/tasklist)
+Postman collection:
 
-### Project service interfaces
+- `misc/content-ledger-postman-collection.json`
 
-- `user-service`: [http://localhost:8001](http://localhost:8001)
-- `verification-service`: [http://localhost:8002](http://localhost:8002)
-- `reporting-service`: [http://localhost:8003](http://localhost:8003)
-- `attestation-service`: [http://localhost:8004](http://localhost:8004)
-- `sla-monitor`: [http://localhost:8005](http://localhost:8005)
-- `ui`: [http://localhost:8086](http://localhost:8086)
-- `notification-service`: no HTTP interface (Kafka consumer only)
-- Kafka UI: [http://localhost:8079](http://localhost:8079)
+### For further processor-specific details
 
-## Process Interaction APIs (Start and Drive Instances)
+- `processors/sla-monitor/README.md`
+- `processors/content-ledger/README.md`
+
+## Process Interaction APIs (Core Services)
 
 ### Start process instances
 
@@ -262,7 +261,7 @@ Reset Kafka history and restart the minimal stream-demo stack cleanly:
   - `POST http://localhost:8003/reports`
   - body: `{ "reporterId": "<user-id>", "postId": "post-123", "postOwnerId": "<owner-id>", "reason": "spam", "objectionMode": "manual" }`
 
-### Interact with running instances (message correlation paths)
+### Interact with running instances
 
 - Verification peer verdict callback:
   - `POST http://localhost:8002/verifications/{verificationId}/peer-response`
@@ -271,7 +270,7 @@ Reset Kafka history and restart the minimal stream-demo stack cleanly:
   - `POST http://localhost:8003/reports/{reportId}/objection`
   - triggers Camunda message correlation (`post-owner-objection`)
 
-### Query local process-facing state
+### Query process-facing state
 
 - `GET http://localhost:8002/verifications/{verificationId}`
 - `GET http://localhost:8003/reports/{reportId}`
@@ -300,38 +299,55 @@ curl -X POST http://localhost:8003/reports \
   -d '{"reporterId":"11111111-1111-4111-8111-111111111111","postId":"post-123","postOwnerId":"22222222-2222-4222-8222-222222222222","reason":"spam","objectionMode":"manual"}'
 ```
 
-Watch the process in Operate while executing these calls.
+## Localhost Interfaces and Ports
+
+### Camunda 8 Run (non-Docker mode)
+
+- `8080` - Camunda core (Operate, Tasklist, Identity, APIs)
+- `26500` - Zeebe gRPC gateway
+- `8086` - Connectors API
+- `9200` - Elasticsearch
+- `9300` - Elasticsearch cluster comm
+- `9600` - Metrics
+
+### Camunda web interfaces
+
+- Operate: [http://localhost:8080/operate](http://localhost:8080/operate)
+- Tasklist: [http://localhost:8080/tasklist](http://localhost:8080/tasklist)
+
+### Project service interfaces
+
+- `user-service`: [http://localhost:8001](http://localhost:8001)
+- `verification-service`: [http://localhost:8002](http://localhost:8002)
+- `reporting-service`: [http://localhost:8003](http://localhost:8003)
+- `attestation-service`: [http://localhost:8004](http://localhost:8004)
+- `sla-monitor`: [http://localhost:8005](http://localhost:8005)
+- `content-ledger`: [http://localhost:8085](http://localhost:8085)
+- `ui`: [http://localhost:8086](http://localhost:8086)
+- `notification-service`: no HTTP interface (Kafka consumer only)
+- Kafka UI: [http://localhost:8079](http://localhost:8079)
 
 ## Stop and Cleanup
-
-### Stop project containers
 
 ```bash
 docker compose down
 docker compose -f docker-compose.infra.yml down
 ```
 
-### Stop Camunda 8 Run
-
-From your c8run directory:
+Stop Camunda 8 Run from your c8run folder:
 
 ```bash
 ./c8run stop
-```
-
-If needed:
-
-```bash
-./shutdown.sh
 ```
 
 ## Troubleshooting
 
 - If services cannot connect to Zeebe:
   - verify c8run is running
-  - verify `localhost:26500` is open
-- If c8run fails to start due to port conflicts, check:
+  - verify `localhost:26500` is reachable
+- If c8run fails due to port conflicts, check:
   - `8080`, `26500`, `8086`, `9200`, `9300`, `9600`
 - If BPMN start fails with "process not found":
   - redeploy BPMN from Modeler
   - confirm process IDs are unchanged
+

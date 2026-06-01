@@ -1,201 +1,91 @@
-# Content Decision Ledger
+# Content Ledger
 
-Stream-processing application that materializes the full lifecycle of every
-content item (verifications, reports, deletions, objections) into a queryable
-KTable in real time.
+Java Kafka Streams processor that builds a queryable decision history per `contentId`.
 
-## Tech stack
+## What It Does
 
+- Consumes: `verification-notification`, `report-notification`, `post-deleted`, `objection-approved`
+- Builds materialized state in Kafka Streams (RocksDB store)
+- Serves query APIs on port `8085`
+- Writes aggregated topic: `content-decision-ledger`
 
-|               |                                                                                                                                             |
-| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| Language      | Java 21                                                                                                                                     |
-| Stream engine | Apache Kafka Streams 3.7                                                                                                                    |
-| App framework | Spring Boot 3.3                                                                                                                             |
-| Build         | Maven (multi-stage Docker build, no local Java required)                                                                                    |
-| Serialization | JSON (registry-less). Avro schemas provided under `[schemas/content-ledger/](../../schemas/content-ledger/)` as future-proof documentation. |
-| State store   | RocksDB (default), changelog-backed                                                                                                         |
-| HTTP port     | **8085**                                                                                                                                    |
+The topology reads four domain streams, normalizes them into one `ContentEvent` model, re-keys everything by `contentId`, and merges the streams. It then applies `groupByKey + aggregate` to build one `ContentDecisionState` per content item in a materialized Kafka Streams state store. This state is exposed via Interactive Query endpoints and also emitted to the compacted `content-decision-ledger` topic.
+
+## Lecture Concepts Realized
 
 
-## What it does (summary)
+| Concept                                           | Where to find it in code                                                                                                                                                                                           |
+| ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Stateless operations (`mapValues`, `filter`)      | `processors/content-ledger/src/main/java/com/edpo/contentledger/stream/ContentLedgerTopology.java` (`readAndNormalize`)                                                                                            |
+| Re-keying / repartitioning (`selectKey` concept)  | `processors/content-ledger/src/main/java/com/edpo/contentledger/stream/ContentLedgerTopology.java` (`readAndNormalize` -> `.map(... event.contentId())`)                                                           |
+| Multi-stream merge (four topics into one flow)    | `processors/content-ledger/src/main/java/com/edpo/contentledger/stream/ContentLedgerTopology.java` (`verifications.merge(...).merge(...).merge(...)`)                                                              |
+| Streams + Tables together (`KStream` -> `KTable`) | `processors/content-ledger/src/main/java/com/edpo/contentledger/stream/ContentLedgerTopology.java` (`groupByKey().aggregate(...)`)                                                                                 |
+| Materialized state store (RocksDB)                | `processors/content-ledger/src/main/java/com/edpo/contentledger/stream/ContentLedgerTopology.java` (`Stores.persistentKeyValueStore`, `Materialized.as`)                                                           |
+| Interactive Queries                               | `processors/content-ledger/src/main/java/com/edpo/contentledger/web/LedgerQueryService.java`, `processors/content-ledger/src/main/java/com/edpo/contentledger/web/LedgerController.java`                           |
+| Event-time orientation                            | `processors/content-ledger/src/main/java/com/edpo/contentledger/stream/EventNormalizer.java` (`eventTime`), `processors/content-ledger/src/main/java/com/edpo/contentledger/stream/PayloadEventTimeExtractor.java` |
+| Out-of-order and duplicate handling               | `processors/content-ledger/src/main/java/com/edpo/contentledger/model/ContentDecisionState.java` (`insertSorted`, `seenEventIds`)                                                                                  |
 
-Four input topics — `verification-notification`, `report-notification`,
-`post-deleted`, `objection-approved` — are normalized into a unified
-`ContentEvent`, re-keyed on `contentId`, merged into one stream, and aggregated
-into a `ContentDecisionState` KTable backed by RocksDB. The table is also
-written to the log-compacted topic `content-decision-ledger`. Two
-**Interactive Query** REST endpoints expose the materialized state for any
-content item without touching any database. The browser UI now lives in the
-standalone `ui/` service and proxies these endpoints.
-
-## Lecture concepts realized (Week 8 + Week 9)
-
-
-| Concept                                         | Where it lives in the code                                     |
-| ----------------------------------------------- | -------------------------------------------------------------- |
-| Single-event processing (`mapValues`, `filter`) | `EventNormalizer`, `ContentLedgerTopology#readAndNormalize`    |
-| `selectKey` → repartitioning                    | `ContentLedgerTopology#readAndNormalize` (`.map(...)`)         |
-| Stream merging (4 → 1)                          | `ContentLedgerTopology` (`.merge(...).merge(...).merge(...)`)  |
-| `groupByKey` + `aggregate` → KTable             | `ContentLedgerTopology`                                        |
-| Materialized state store (RocksDB)              | `Stores.persistentKeyValueStore("content-state-store")`        |
-| Streams **and** Tables in one topology          | KStream sources → KTable aggregate                             |
-| Interactive Queries                             | `LedgerQueryService` + `LedgerController`                      |
-| Reprocessing pattern                            | Output topic configured with `cleanup.policy=compact`          |
-| Event-time hygiene                              | `PayloadEventTimeExtractor` reads `eventTime` from the payload |
-
-
-## REST API
-
-
-| Method | Path                                                          | Notes                                   |
-| ------ | ------------------------------------------------------------- | --------------------------------------- |
-| `GET`  | `/api/content?limit=&withState=`                              | Lists tracked content items             |
-| `GET`  | `/api/content/{contentId}/state`                              | Current state summary (no trace)        |
-| `GET`  | `/api/content/{contentId}/decision-trace`                     | **Full** chronological decision history |
-| `GET`  | `/api/health/stream`                                          | Kafka Streams runtime state             |
-| `GET`  | `/actuator/health` `/actuator/metrics` `/actuator/prometheus` | Spring Boot Actuator                    |
-
-
-The Postman collection
-`[misc/content-ledger-postman-collection.json](../../misc/content-ledger-postman-collection.json)`
-covers both the query endpoints and the upstream services needed to drive
-events through Camunda.
 
 ## Run
 
-### 0. Start Camunda 8 Run (pre-requisite)
-
-The upstream Python services drive their BPMN flows against Camunda 8 Run on
-`localhost:26500`. The ledger itself does not talk to Camunda, but without it
-no events will ever land on the four input topics. See the project root
-[README](../../README.md) §1 for the exact `c8run` start command.
-
-### 1. Start infra (Kafka + Kafka UI)
+From project root:
 
 ```bash
 docker compose -f docker-compose.infra.yml up -d
+docker compose up -d --build content-ledger
 ```
 
-### 2. Start the platform + the ledger
+For realistic event traffic, also run the upstream services:
 
 ```bash
-docker compose up -d --build user-service verification-service reporting-service \
-                            attestation-service notification-service \
-                            sla-monitor content-ledger ui
+docker compose up -d --build user-service verification-service reporting-service attestation-service notification-service
 ```
 
-- ledger API: <http://localhost:8085>
-- standalone UI: <http://localhost:8086>
+Endpoints:
 
-### 3. Send some traffic
+- `http://localhost:8085` (content-ledger API)
+- `http://localhost:8086` (UI proxy, if `ui` service is running)
 
-Option A — convenience script (drives one full lifecycle, fully unattended):
+## API
+
+```bash
+curl "http://localhost:8085/api/content?limit=20&withState=true"
+curl "http://localhost:8085/api/content/<contentId>/state"
+curl "http://localhost:8085/api/content/<contentId>/decision-trace"
+curl "http://localhost:8085/api/health/stream"
+```
+
+## Practical Demo
+
+Run the included end-to-end script:
 
 ```bash
 ./processors/content-ledger/scripts/demo.sh
 ```
 
-The script claims and completes the two BPMN user tasks
-(`Check User Background`, `Check if report is valid`) via the Camunda 8 REST
-API (`/v2/user-tasks/...`) so a single invocation produces the full
-4-event trace (VERIFICATION → REPORT × 2 → DELETION) without any Tasklist
-interaction. Override the Camunda endpoint or credentials via the
-`ZEEBE` / `ZEEBE_AUTH` env vars if needed.
+The script drives user registration, verification, and reporting via the platform services and auto-completes required Camunda user tasks so events end up in the ledger.
 
-Option B — Postman collection
-`misc/content-ledger-postman-collection.json` (variable `content_id` is the
-shared key across verification and reporting flows). User tasks have to be
-completed manually in Tasklist (<http://localhost:8080/tasklist>) when using
-this option.
+## Important Correlation Rule
 
-Option C — direct curl:
+The ledger correlates by `contentId`.
 
-```bash
-curl -s http://localhost:8085/api/content | jq
-curl -s http://localhost:8085/api/content/post-demo-1/state | jq
-curl -s http://localhost:8085/api/content/post-demo-1/decision-trace | jq
-```
+- `verification-service` derives `contentId` from `contentUrl`
+- `reporting-service` uses `postId` as correlation key
 
-## Design trade-offs (consciously chosen for this project context)
-
-- **Single-instance Interactive Queries.** Local-store-only queries are
-  sufficient at course scale; the code documents how a multi-instance setup
-  would add `KafkaStreams#queryMetadataForKey`-based remote IQ.
-- **JSON over Avro at runtime.** The existing Python producers emit JSON. We
-  keep the same wire format here to avoid pulling in Schema Registry. The
-  Avro `.avsc` definitions live in
-  [`schemas/content-ledger/`](../../schemas/content-ledger/) and the
-  `JsonSerde` is structured so a future swap is local to one class.
-- **`contentId` correlation key.** The upstream `verification-service`
-  derives `contentId = "content-<sha256(contentUrl)[:16]>"` while
-  `reporting-service` / `post-deleted` / `objection-approved` use
-  `contentId = postId`. For verification events and reporting events to
-  land on the **same** ledger entry, the caller must use the hashed
-  contentId as the postId when filing the report. The demo script and
-  Postman collection do this automatically by:
-    1. submitting the verification,
-    2. reading back `contentId` from `GET /verifications/{id}`,
-    3. using that value as the `postId` when calling `POST /reports`.
-- **Uncapped decision trace.** The ledger keeps the *full* decision history
-  per content item. At course scale this is bounded by the simulator's event
-  volume per content item.
-- **At-least-once + idempotent aggregator.** Each event carries an `eventId`;
-  the aggregator deduplicates against `seenEventIds` so retries don't double-
-  count decisions.
-- **Out-of-order safety.** The trace is sorted by `eventTime` on insert, so
-  late-arriving events end up in their chronological position rather than at
-  the tail.
-- **Deterministic fallbacks.** When a producer omits `eventTime` or
-  `eventId`, the normalizer never reaches for `Instant.now()` or
-  `UUID.randomUUID()` — that would break reprocessing determinism. The
-  aggregator fills missing `eventTime` with ingestion time once, and missing
-  event ids are derived from a content hash of the raw envelope.
-
-## Tests
-
-`mvn -f processors/content-ledger/pom.xml test` runs the topology against
-`TopologyTestDriver` for: verification→report→deletion lifecycle, objection
-restoring deleted content, duplicate `eventId` idempotency, out-of-order
-events, and output-topic emission.
+To merge both flows into one ledger entry, use the verification-derived `contentId` as `postId` when creating a report. The demo script handles this automatically.
 
 ## Troubleshooting
 
-`GET /api/content/<id>/state` returns `{"error":"not_found"}` for a `contentId`
-you just submitted? The ledger is a pure consumer — `not_found` always means
-no event for that key has reached the four input topics yet. Diagnose from
-the ledger outwards in this order:
+- If `GET /api/content/<id>/state` returns `not_found`:
+  - Check stream health: `curl http://localhost:8085/api/health/stream`
+  - Check upstream services are running
+  - Check events are produced to the input topics
 
-1. **Stream-thread is RUNNING**
-   ```bash
-   curl -s http://localhost:8085/api/health/stream
-   ```
-   Expect `{"state":"RUNNING","ready":true}`. Anything else is a ledger-side
-   issue — check `docker compose logs content-ledger`.
+## References
 
-2. **Input topics actually received the event**
-   ```bash
-   docker exec cv-kafka bash -lc \
-     'for t in verification-notification report-notification post-deleted objection-approved; do
-        echo -n "$t: "
-        kafka-run-class kafka.tools.GetOffsetShell --broker-list localhost:9092 --topic "$t" | awk -F: "{print \$3}"
-      done'
-   ```
-   If the offsets did **not** grow between two consecutive demo runs, the
-   producers (`verification-service` / `reporting-service`) never published —
-   the problem is upstream, not in the ledger.
+- Root setup and platform flow: `[README.md](../../README.md)`
+- Demo script for end-to-end ledger flow: `[processors/content-ledger/scripts/demo.sh](./scripts/demo.sh)`
+- Postman collection: `[misc/content-ledger-postman-collection.json](../../misc/content-ledger-postman-collection.json)`
+- Related SPA (SLA monitor): `[processors/sla-monitor/README.md](../sla-monitor/README.md)`
+- SLA flow context used by both SPAs: `[docs/processing/sla-monitor-flow.md](../../docs/processing/sla-monitor-flow.md)`
 
-3. **Upstream producers + Camunda are healthy**
-   - `docker compose logs verification-service reporting-service` should show
-     worker activity, not a stream of `ZeebeGatewayUnavailableError`.
-   - `curl -u demo:demo http://localhost:8080/v2/topology` must return 200.
-   - If only step 2 shows no growth but the services log incoming HTTP `202`s:
-     `docker compose restart user-service verification-service reporting-service`
-     resets stuck `pyzeebe` job pollers.
-
-4. **`contentId` correlation is correct.** Verification publishes under the
-   hashed `content-<sha256(contentUrl)[:16]>` id; reporting publishes under
-   the `postId` you sent. The demo script and Postman collection thread the
-   hashed id back into the report call — manual `curl` flows have to do the
-   same or the two events will materialize into two different ledger
-   entries.
